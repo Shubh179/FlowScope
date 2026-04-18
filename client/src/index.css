@@ -1,0 +1,85 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body, #root { height: 100%; }
+  body {
+    background: #000000;
+    color: #e2e8f0;
+    font-family: 'Inter', 'Montserrat', sans-serif;
+    @apply bg-[var(--bg-main)] text-slate-900 antialiased;
+    font-feature-settings: "ss01", "ss02", "cv01", "cv02";
+  }
+}
+
+@layer components {
+  .premium-card {
+    @apply bg-white border border-slate-100 rounded-3xl shadow-premium transition-all duration-300;
+  }
+
+  .premium-card:hover {
+    @apply border-blue-200 shadow-elevated -translate-y-1;
+  }
+
+  .badge {
+    @apply px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border;
+  }
+
+  .badge-blue {
+    @apply bg-blue-50 text-blue-600 border-blue-100;
+  }
+
+  .badge-emerald {
+    @apply bg-emerald-50 text-emerald-600 border-emerald-100;
+  }
+
+  .glass-panel {
+    @apply bg-white/80 backdrop-blur-md border border-white/20 shadow-premium;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    @apply bg-slate-200 rounded-full hover:bg-slate-300 transition-colors;
+  }
+
+  .shimmer {
+    @apply relative overflow-hidden;
+  }
+
+  .shimmer::after {
+    @apply absolute inset-0 content-[''] -translate-x-full;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.6), transparent);
+    animation: shimmer-anim 2s infinite;
+  }
+
+  @keyframes shimmer-anim {
+    100% { transform: translateX(100%); }
+  }
+}
+
+/* Cytoscape Tooltip Styling */
+.cy-tooltip {
+  @apply fixed z-[9999] pointer-events-none bg-white p-4 rounded-3xl shadow-elevated border border-slate-100 backdrop-blur-md transition-opacity duration-200;
+}
+
+/* Leaflet Overrides */
+.leaflet-container {
+  @apply rounded-3xl overflow-hidden grayscale-[0.2];
+}
+
+.premium-popup .leaflet-popup-content-wrapper {
+  @apply rounded-2xl shadow-elevated p-0 border-none;
+}
+
+.premium-popup .leaflet-popup-tip-container {
+  @apply hidden;
+}
