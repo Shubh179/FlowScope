@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
+import { LayoutDashboard, Cloud, FileText, Settings, Search as SearchIcon } from 'lucide-react';
+import Dashboard from './components/Dashboard';
 import SearchBar from './components/SearchBar';
 import HSNSelector from './components/HSNSelector';
 import GraphView from './components/GraphView';
@@ -9,6 +11,9 @@ import DetailsPanel from './components/DetailsPanel';
 const QUICK = ['isuzu','škoda auto','cage warriors','kaipan','ineos group'];
 
 export default function App() {
+  const [page, setPage] = useState('dashboard');
+  
+  // Graph/Trace states
   const [company,   setCompany]   = useState(null);
   const [hsn,       setHsn]       = useState(null);
   const [hsnDesc,   setHsnDesc]   = useState('');
@@ -157,181 +162,176 @@ export default function App() {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-[#F8FAFC] overflow-hidden text-slate-800">
-      
-      {/* ─── HEADER ─── */}
-      <header className="h-16 bg-white border-b border-slate-200 flex items-center px-6 gap-6 shadow-sm z-30">
-        <div className="flex items-center gap-3 w-48">
-          <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-200">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5">
-              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-            </svg>
+    <div className="flex flex-col h-screen bg-gray-50 text-gray-900 font-sans overflow-hidden">
+      {/* Top Header */}
+      <header className="flex items-center justify-center h-16 bg-white border-b border-gray-200 shrink-0 px-4">
+        <div className="w-full max-w-xl relative">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <SearchIcon size={16} className="text-gray-400" />
           </div>
-          <div>
-            <div className="text-lg font-black tracking-tighter text-slate-900 leading-none">FlowScope</div>
-            <div className="text-[10px] uppercase tracking-widest font-bold text-slate-400 mt-1">Intelligence</div>
-          </div>
+          <input
+            type="text"
+            className="block w-full pl-10 pr-3 py-2 border border-gray-200 rounded-md leading-5 bg-gray-50 placeholder-gray-400 focus:outline-none focus:bg-white focus:ring-1 focus:ring-gray-400 focus:border-gray-400 sm:text-sm transition-colors"
+            placeholder="Enter company name"
+          />
         </div>
-
-        <div className="flex-1 max-w-xl">
-          <SearchBar onCompanySelect={selectCompany} />
-        </div>
-
-        {stats && (
-          <div className="flex items-center gap-6 border-l border-slate-100 pl-6 h-8">
-            <div className="text-center">
-              <div className="text-sm font-bold text-blue-600">{stats.totalCompanies}</div>
-              <div className="text-[9px] uppercase font-bold text-slate-400">Companies</div>
-            </div>
-            <div className="text-center">
-              <div className="text-sm font-bold text-violet-600">{stats.totalTradeLinks}</div>
-              <div className="text-[9px] uppercase font-bold text-slate-400">Trade Links</div>
-            </div>
-            <div className="text-center">
-              <div className="text-sm font-bold text-emerald-600">{stats.totalCountries}</div>
-              <div className="text-[9px] uppercase font-bold text-slate-400">Countries</div>
-            </div>
-          </div>
-        )}
       </header>
 
-      {/* ─── MAIN CONTENT AREA ─── */}
-      <div className="flex-1 flex overflow-hidden">
-        
-        {/* LEFT FILTERS */}
-        <aside className="w-64 bg-white border-r border-slate-200 flex flex-col overflow-hidden z-20">
-          <div className="p-4 border-b border-slate-50 bg-slate-50/50">
-            <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">HSN Filter</h3>
-          </div>
-          <div className="flex-1 overflow-y-auto p-4">
-            {company ? (
-              <HSNSelector companyName={company.name} onHSNSelect={selectHsn} selectedHSN={hsn} />
-            ) : (
-              <div className="text-center py-10 px-4">
-                <div className="text-[11px] text-slate-300 font-medium leading-relaxed">
-                  Search a company to begin exploring networks
-                </div>
-              </div>
-            )}
-          </div>
-          
-          <div className="p-4 border-t border-slate-100">
-             <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">Quick List</h3>
-             <div className="flex flex-wrap gap-1.5">
-               {QUICK.map(q => (
-                 <button key={q} onClick={() => selectCompany({name: q, country: ''})}
-                   className="px-2.5 py-1.5 bg-slate-50 hover:bg-blue-50 text-slate-600 hover:text-blue-700 
-                              text-[11px] font-bold rounded-lg transition-all border border-slate-100">
-                   {q}
-                 </button>
-               ))}
-             </div>
+      {/* Main Area */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Sidebar */}
+        <aside className="w-56 bg-white border-r border-gray-200 flex flex-col p-4 shrink-0">
+          <nav className="flex-1 space-y-1">
+            <button
+              onClick={() => setPage('dashboard')}
+              className={`flex items-center gap-3 w-full px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                page === 'dashboard' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
+              }`}
+            >
+              <LayoutDashboard size={18} />
+              <span>Dashboard</span>
+            </button>
+            <button
+              onClick={() => setPage('analytics')}
+              className={`flex items-center gap-3 w-full px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                page === 'analytics' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
+              }`}
+            >
+              <Cloud size={18} />
+              <span>Analytics</span>
+            </button>
+            <button
+              onClick={() => setPage('reports')}
+              className={`flex items-center gap-3 w-full px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                page === 'reports' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
+              }`}
+            >
+              <FileText size={18} />
+              <span>Reports</span>
+            </button>
+            <button
+              onClick={() => setPage('settings')}
+              className={`flex items-center gap-3 w-full px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                page === 'settings' ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900'
+              }`}
+            >
+              <Settings size={18} />
+              <span>Settings</span>
+            </button>
+          </nav>
+
+          <div className="mt-auto pt-4 border-t border-gray-100 space-y-4">
+            <div className="px-3">
+              <div className="text-xs font-medium text-gray-900">team@flowscope.app</div>
+              <div className="text-[10px] text-gray-500 font-medium">Admin Panel v1.0</div>
+            </div>
+            <button className="flex items-center gap-3 w-full px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-md transition-colors">
+              <div className="w-6 h-6 rounded-full bg-gray-900 text-white flex items-center justify-center text-[10px] font-bold">N</div>
+              <span>Log Out</span>
+            </button>
           </div>
         </aside>
 
-        {/* CENTER GRAPH (MAIN) */}
-        <main className="flex-1 bg-[#F8FAFC] relative overflow-hidden">
-          {!company ? (
-            <div className="h-full flex items-center justify-center">
-              <div className="text-center max-w-sm px-6">
-                <div className="mb-6 opacity-40">
-                   <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" className="mx-auto text-blue-500">
-                     <circle cx="12" cy="12" r="3"/><circle cx="5" cy="6" r="2"/><circle cx="19" cy="6" r="2"/>
-                     <circle cx="5" cy="18" r="2"/><circle cx="19" cy="18" r="2"/>
-                     <path d="M7 6h10M6 8l5 8M18 8l-5 8"/>
-                   </svg>
+        {/* Content */}
+        <main className="flex-1 overflow-y-auto bg-[#F9FAFB] custom-scrollbar relative">
+          {page === 'dashboard' ? <Dashboard /> : page === 'analytics' ? (
+            <div className="flex h-full w-full">
+              {/* Left Controls */}
+              <div className="w-80 bg-white border-r border-slate-200 flex flex-col z-20 shadow-sm shrink-0">
+                <div className="p-5 border-b border-slate-100">
+                  <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-blue-500"></span> Tracing Engine
+                  </h2>
                 </div>
-                <h2 className="text-xl font-bold text-slate-800 mb-2">Build Trade Networks</h2>
-                <p className="text-sm text-slate-500">
-                  Select a company to visualize multi-tier supplier relationships and global product flows.
-                </p>
+                <div className="flex-1 overflow-y-auto">
+                  <SearchBar onSelect={selectCompany} selected={company} />
+                  {company && <HSNSelector selected={hsn} onSelect={selectHsn} />}
+                </div>
               </div>
+              
+              {/* Center Graph */}
+              <div className="flex-1 bg-[#F8FAFC] relative overflow-hidden">
+                {!company ? (
+                  <div className="h-full flex items-center justify-center">
+                    <div className="text-center max-w-sm px-6">
+                      <div className="mb-6 opacity-40">
+                         <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" className="mx-auto text-blue-500">
+                           <circle cx="12" cy="12" r="3"/><circle cx="5" cy="6" r="2"/><circle cx="19" cy="6" r="2"/>
+                           <circle cx="5" cy="18" r="2"/><circle cx="19" cy="18" r="2"/>
+                           <path d="M7 6h10M6 8l5 8M18 8l-5 8"/>
+                         </svg>
+                      </div>
+                      <h2 className="text-xl font-bold text-slate-800 mb-2">Build Trade Networks</h2>
+                      <p className="text-sm text-slate-500">
+                        Select a company to visualize multi-tier supplier relationships and global product flows.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="h-full relative">
+                    {loading && (
+                      <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center gap-4">
+                        <div className="w-12 h-12 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin"/>
+                        <div className="text-sm font-bold text-slate-600">{traceLog}</div>
+                        <div className="text-[10px] text-slate-400">Querying Gemini AI + UN Comtrade API...</div>
+                      </div>
+                    )}
+                    {error && (
+                      <div className="absolute top-4 left-4 right-4 z-10 bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700 font-medium">
+                        {error}
+                      </div>
+                    )}
+                    {!hsn && !loading && (
+                      <div className="h-full flex items-center justify-center">
+                        <div className="text-center max-w-sm px-6">
+                          <div className="text-4xl mb-4">🏭</div>
+                          <h3 className="text-lg font-bold text-slate-700 mb-2">Select an HSN Code</h3>
+                          <p className="text-sm text-slate-400">
+                            Pick a product category from the left panel to begin tracing the supply chain for <strong>{company.name}</strong>.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    <GraphView 
+                      graphData={graphData} 
+                      onNodeClick={setSelNode} 
+                      onExpandNode={expandNode}
+                      expandingNode={expandingNode}
+                      selectedNode={selNode?.name || selNode?.id}
+                      highlightCompany={company?.name}
+                    />
+
+                    {/* Expand Status Banner */}
+                    {expandingNode && (
+                      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 
+                                      bg-blue-600 text-white px-5 py-2.5 rounded-2xl shadow-xl
+                                      flex items-center gap-3 animate-pulse">
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/>
+                        <span className="text-sm font-bold">Expanding {expandingNode}...</span>
+                      </div>
+                    )}
+
+                    {/* Trace Log */}
+                    {traceLog && !loading && !expandingNode && (
+                      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20
+                                      bg-white/90 backdrop-blur-md text-slate-600 px-4 py-2 rounded-xl shadow-sm
+                                      border border-slate-200 text-xs font-bold">
+                        {traceLog}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              
+              {/* Right Details */}
+              <DetailsPanel node={selNode} onClose={() => setSelNode(null)} />
             </div>
           ) : (
-            <div className="h-full relative">
-              {loading && (
-                <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-10 flex flex-col items-center justify-center gap-4">
-                  <div className="w-12 h-12 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin"/>
-                  <div className="text-sm font-bold text-slate-600">{traceLog}</div>
-                  <div className="text-[10px] text-slate-400">Querying Gemini AI + UN Comtrade API...</div>
-                </div>
-              )}
-              {error && (
-                <div className="absolute top-4 left-4 right-4 z-10 bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700 font-medium">
-                  {error}
-                </div>
-              )}
-              {!hsn && !loading && (
-                <div className="h-full flex items-center justify-center">
-                  <div className="text-center max-w-sm px-6">
-                    <div className="text-4xl mb-4">🏭</div>
-                    <h3 className="text-lg font-bold text-slate-700 mb-2">Select an HSN Code</h3>
-                    <p className="text-sm text-slate-400">
-                      Pick a product category from the left panel to begin tracing the supply chain for <strong>{company.name}</strong>.
-                    </p>
-                  </div>
-                </div>
-              )}
-              <GraphView 
-                graphData={graphData} 
-                onNodeClick={setSelNode} 
-                onExpandNode={expandNode}
-                expandingNode={expandingNode}
-                selectedNode={selNode?.name || selNode?.id}
-                highlightCompany={company?.name}
-              />
-
-              {/* Expand Status Banner */}
-              {expandingNode && (
-                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 
-                                bg-blue-600 text-white px-5 py-2.5 rounded-2xl shadow-xl
-                                flex items-center gap-3 animate-pulse">
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/>
-                  <span className="text-sm font-bold">Expanding {expandingNode}...</span>
-                </div>
-              )}
-
-              {/* Trace Log */}
-              {traceLog && !loading && !expandingNode && (
-                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20
-                                bg-white/90 backdrop-blur-md text-slate-600 px-4 py-2 rounded-xl shadow-sm
-                                border border-slate-200 text-xs font-bold">
-                  {traceLog}
-                </div>
-              )}
+            <div className="flex items-center justify-center h-full text-gray-400">
+              Coming Soon
             </div>
           )}
         </main>
-
-        {/* RIGHT SIDEBAR (DETAILS + MAP) */}
-        <aside className="w-[360px] bg-white border-l border-slate-200 flex flex-col overflow-hidden z-20">
-          
-          {/* Details (Top 60%) */}
-          <div className="flex-1 flex flex-col overflow-hidden border-b border-slate-200">
-            <div className="p-4 border-b border-slate-50 bg-slate-50/50 flex justify-between items-center">
-              <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Selected Detail</h3>
-              {selNode && <span className="text-[10px] font-bold bg-blue-50 text-blue-600 px-2 py-0.5 rounded-md">Live</span>}
-            </div>
-            <div className="flex-1 overflow-y-auto">
-              <DetailsPanel selectedCompany={company} selectedNode={selNode} />
-            </div>
-          </div>
-
-          {/* Map (Bottom 40%) */}
-          <div className="h-[320px] bg-slate-50 flex flex-col overflow-hidden">
-            <div className="p-3 border-b border-slate-100 bg-white shadow-sm flex justify-between items-center">
-              <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Geographic Flow</h3>
-              {graphData?.tradeRoutes?.length > 0 && 
-                <span className="text-[10px] font-bold text-emerald-600">{graphData.tradeRoutes.length} Routes</span>
-              }
-            </div>
-            <div className="flex-1 relative">
-              <MapView tradeRoutes={graphData?.tradeRoutes} nodes={graphData?.nodes} />
-            </div>
-          </div>
-
-        </aside>
-
       </div>
     </div>
   );

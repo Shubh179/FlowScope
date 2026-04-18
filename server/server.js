@@ -7,6 +7,7 @@ const csvService = require('./services/csvService');
 const companiesRouter = require('./routes/companies');
 const graphRouter = require('./routes/graph');
 const traceRouter = require('./routes/trace');
+const dashboardRouter = require('./routes/dashboard');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -19,6 +20,23 @@ app.use(express.json());
 app.use('/api/companies', companiesRouter);
 app.use('/api/graph', graphRouter);
 app.use('/api/trace', traceRouter);
+app.use('/api/dashboard', dashboardRouter);
+
+app.get('/api/news', async (req, res) => {
+  try {
+    const userQuery = req.query.q || 'supply chain';
+    // Ensure "trade" is part of the query to only show trade news
+    const finalQuery = userQuery.toLowerCase().includes('trade') ? userQuery : `${userQuery} AND trade`;
+    
+    // Using fetch API
+    const response = await fetch(`https://newsdata.io/api/1/news?apikey=${process.env.NEWS_API_KEY}&q=${encodeURIComponent(finalQuery)}`);
+    const data = await response.json();
+    res.json(data);
+  } catch (error) {
+    console.error('News fetch error:', error);
+    res.status(500).json({ error: 'Failed to fetch news' });
+  }
+});
 
 // ─── Health Check ───
 app.get('/api/health', (req, res) => {
