@@ -32,7 +32,7 @@ export default function App() {
         companyCountry: c.country || 'Unknown',
         targetHsCode: h,
         hsnDescription: desc || '',
-        maxTiers: 1,
+        maxTiers: 3,
       };
       setTraceLog(`Tracing supply chain for ${c.name} (HS ${h})...`);
       const { data } = await axios.post('/api/trace/expand', payload, { timeout: 120000 });
