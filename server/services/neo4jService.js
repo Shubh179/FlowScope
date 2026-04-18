@@ -39,12 +39,26 @@ class Neo4jService {
          ORDER BY totalQuantity DESC`,
         { name: companyName }
       );
-      return result.records.map((r) => ({
+      const hsnList = result.records.map((r) => ({
         code: r.get('code'),
         description: r.get('description'),
         count: r.get('count').toNumber(),
         totalQuantity: r.get('totalQuantity').toNumber(),
       }));
+
+      // Since we wiped the mock data edges in production seed, return default triggers
+      // if no edges exist yet so the user can test the Gemini Traversal engine!
+      if (hsnList.length === 0) {
+        return [
+          { code: '8708', description: 'Motor vehicle parts and accessories', count: 0, totalQuantity: 0 },
+          { code: '8507', description: 'Electric accumulators (Batteries)', count: 0, totalQuantity: 0 },
+          { code: '8542', description: 'Electronic integrated circuits', count: 0, totalQuantity: 0 },
+          { code: '3004', description: 'Medicaments and Pharmaceuticals', count: 0, totalQuantity: 0 },
+          { code: '7208', description: 'Flat-rolled products of iron/steel', count: 0, totalQuantity: 0 }
+        ];
+      }
+
+      return hsnList;
     } finally {
       await session.close();
     }

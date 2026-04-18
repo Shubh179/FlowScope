@@ -9,7 +9,14 @@ async function initDriver() {
   const password = process.env.NEO4J_PASSWORD || 'password';
 
   try {
-    driver = neo4j.driver(uri, neo4j.auth.basic(user, password));
+    // Optimized driver config for serverless/cloud environments
+    driver = neo4j.driver(uri, neo4j.auth.basic(user, password), {
+      maxConnectionLifetime: 3 * 60 * 60 * 1000, // 3 hours
+      maxConnectionPoolSize: 50,
+      connectionTimeout: 30000,
+      logging: neo4j.logging.console('warn')
+    });
+    
     const serverInfo = await driver.getServerInfo();
     console.log(`  ✓ Neo4j connected: ${serverInfo.address}`);
     isConnected = true;

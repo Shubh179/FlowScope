@@ -6,6 +6,7 @@ const { initDriver } = require('./config/neo4j');
 const csvService = require('./services/csvService');
 const companiesRouter = require('./routes/companies');
 const graphRouter = require('./routes/graph');
+const traceRouter = require('./routes/trace');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -17,6 +18,7 @@ app.use(express.json());
 // ─── API Routes ───
 app.use('/api/companies', companiesRouter);
 app.use('/api/graph', graphRouter);
+app.use('/api/trace', traceRouter);
 
 // ─── Health Check ───
 app.get('/api/health', (req, res) => {

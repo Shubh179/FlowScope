@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import cytoscape from 'cytoscape';
-import { Plus, Minus, Maximize, ArrowUpRight, Activity } from 'lucide-react';
+import { Plus, Minus, Maximize, ArrowUpRight, Activity, MousePointerClick } from 'lucide-react';
 
 const COUNTRY_COLORS = {
   'India':'#3B82F6','United States':'#059669','China':'#EF4444','Japan':'#F59E0B',
@@ -10,8 +10,13 @@ const COUNTRY_COLORS = {
   'Norway':'#64748B','Belgium':'#D946EF','Luxembourg':'#0284C7','Netherlands':'#E11D48',
   'Denmark':'#DC2626','Italy':'#2DD4BF','Canada':'#7C3AED','Malaysia':'#65A30D',
   'Congo':'#92400E','Peru':'#B45309','Ivory Coast':'#854D0E','Saudi Arabia':'#166534','Ireland':'#15803D',
+  'Russia':'#EF4444','Mexico':'#22C55E','United Arab Emirates':'#F59E0B',
 };
 const DEFAULT_COLOR = '#94A3B8';
+
+// ─── Tier-based node sizing ───
+const TIER_SIZE = { 0: 56, 1: 42, 2: 34, 3: 28 };
+const TIER_FONT = { 0: '12px', 1: '10px', 2: '9px', 3: '8px' };
 
 function fmt(n) {
   if (!n) return '0';
@@ -20,16 +25,21 @@ function fmt(n) {
   return n.toString();
 }
 
-export default function GraphView({ graphData, onNodeClick, selectedNode, highlightCompany }) {
+export default function GraphView({ graphData, onNodeClick, onExpandNode, expandingNode, selectedNode, highlightCompany }) {
   const containerRef = useRef(null);
   const cyRef        = useRef(null);
   const [tooltip,    setTooltip] = useState(null);
+  const [expandHint, setExpandHint] = useState(null); // show "double-click to expand" hint
+
+  // Keep callback refs up to date
+  const onExpandRef = useRef(onExpandNode);
+  useEffect(() => { onExpandRef.current = onExpandNode; }, [onExpandNode]);
 
   const build = useCallback(() => {
     if (!containerRef.current || !graphData?.nodes?.length) return;
     if (cyRef.current) cyRef.current.destroy();
 
-    const qs   = graphData.edges.map(e => e.quantity || 1);
+    const qs   = graphData.edges.map(e => e.quantity || e.tradeValue || 1);
     const minQ = Math.min(...qs) || 1;
     const maxQ = Math.max(...qs) || 1;
     const wt   = q => maxQ === minQ ? 2.5 : 2 + ((q - minQ) / (maxQ - minQ)) * 6;
@@ -40,9 +50,12 @@ export default function GraphView({ graphData, onNodeClick, selectedNode, highli
           id:          n.id,
           label:       n.label,
           country:     n.country,
+          tier:        n.tier || 0,
           tradeVolume: n.tradeVolume,
           color:       COUNTRY_COLORS[n.country] || DEFAULT_COLOR,
           isRoot:      n.id === highlightCompany,
+          nodeSize:    TIER_SIZE[n.tier] || 28,
+          fontSize:    TIER_FONT[n.tier] || '8px',
         },
       })),
       ...graphData.edges.map((e, i) => ({
@@ -51,9 +64,9 @@ export default function GraphView({ graphData, onNodeClick, selectedNode, highli
           source:  e.source,
           target:  e.target,
           hsn:     e.hsn,
-          quantity:e.quantity,
+          quantity:e.quantity || e.tradeValue,
           product: e.product,
-          w:       wt(e.quantity || 1),
+          w:       wt(e.quantity || e.tradeValue || 1),
           ec:      COUNTRY_COLORS[graphData.nodes.find(node => node.id === e.source)?.country] || DEFAULT_COLOR,
         },
       })),
@@ -70,7 +83,7 @@ export default function GraphView({ graphData, onNodeClick, selectedNode, highli
             'background-opacity': .7,
             label:                'data(label)',
             color:                '#475569',
-            'font-size':          '10px',
+            'font-size':          'data(fontSize)',
             'font-family':        'Inter, sans-serif',
             'font-weight':        700,
             'text-halign':        'center',
@@ -78,8 +91,8 @@ export default function GraphView({ graphData, onNodeClick, selectedNode, highli
             'text-margin-y':      8,
             'text-outline-color': '#F8FAFC',
             'text-outline-width': 3,
-            width:                36,
-            height:               36,
+            width:                'data(nodeSize)',
+            height:               'data(nodeSize)',
             'border-width':       2,
             'border-color':       'data(color)',
             'border-opacity':     .4,
@@ -103,9 +116,11 @@ export default function GraphView({ graphData, onNodeClick, selectedNode, highli
           },
         },
         { selector: 'node.hover',
-          style: { 'background-opacity': 1, width: 44, height: 44, 'border-opacity': 1, 'text-outline-width': 4 } },
+          style: { 'background-opacity': 1, width: 50, height: 50, 'border-opacity': 1, 'text-outline-width': 4 } },
         { selector: 'node.selected-node',
           style: { 'background-opacity': 1, 'border-width': 4, 'border-color': '#2563EB', width: 50, height: 50, 'text-opacity': 1 } },
+        { selector: 'node.expanding',
+          style: { 'background-opacity': 1, 'border-width': 5, 'border-color': '#F59E0B', 'border-style': 'dashed', width: 54, height: 54 } },
         { selector: 'node.dimmed',
           style: { 'background-opacity': .05, 'text-opacity': .1, 'border-opacity': 0.05 } },
         {
@@ -127,11 +142,11 @@ export default function GraphView({ graphData, onNodeClick, selectedNode, highli
           style: {
             'line-opacity': .8,
             width: 5,
-            label: 'data(hsn)',
+            label: 'data(product)',
             color: '#1E293B',
-            'font-size': '10px',
+            'font-size': '9px',
             'font-weight': 800,
-            'font-family': 'JetBrains Mono, monospace',
+            'font-family': 'Inter, sans-serif',
             'text-outline-color': '#fff', 'text-outline-width': 3,
             'text-rotation': 'autorotate',
           },
@@ -148,21 +163,37 @@ export default function GraphView({ graphData, onNodeClick, selectedNode, highli
       minZoom: .15, maxZoom: 4, wheelSensitivity: .2,
     });
 
+    // ─── Single click: select node ───
     cy.on('tap', 'node', evt => {
       const n = evt.target;
-      onNodeClick?.({ name: n.data('id'), country: n.data('country'), tradeVolume: n.data('tradeVolume') });
+      onNodeClick?.({ name: n.data('id'), country: n.data('country'), tier: n.data('tier'), tradeVolume: n.data('tradeVolume') });
     });
+
+    // ─── Double click: expand node (recursive trace) ───
+    cy.on('dbltap', 'node', evt => {
+      const n = evt.target;
+      const nodeData = { name: n.data('id'), country: n.data('country'), tier: n.data('tier') };
+      if (onExpandRef.current) {
+        onExpandRef.current(nodeData);
+      }
+    });
+
     cy.on('mouseover', 'node', evt => {
       evt.target.addClass('hover');
       containerRef.current.style.cursor = 'pointer';
       const hood = evt.target.closedNeighborhood();
       cy.elements().not(hood).addClass('dimmed');
       evt.target.connectedEdges().addClass('connected');
+      
+      // Show expand hint
+      const rp = evt.renderedPosition;
+      setExpandHint({ x: rp.x, y: rp.y - 40, name: evt.target.data('id') });
     });
     cy.on('mouseout', 'node', evt => {
       evt.target.removeClass('hover');
       containerRef.current.style.cursor = 'default';
       cy.elements().removeClass('connected dimmed');
+      setExpandHint(null);
     });
     cy.on('mouseover', 'edge', evt => {
       const e = evt.target; e.addClass('hover');
@@ -187,6 +218,7 @@ export default function GraphView({ graphData, onNodeClick, selectedNode, highli
     return () => { cyRef.current?.destroy(); cyRef.current = null; };
   }, [build]);
 
+  // Handle selected node highlight
   useEffect(() => {
     if (!cyRef.current) return;
     cyRef.current.elements().removeClass('selected-node');
@@ -196,6 +228,16 @@ export default function GraphView({ graphData, onNodeClick, selectedNode, highli
     }
   }, [selectedNode]);
 
+  // Handle expanding node visual indicator
+  useEffect(() => {
+    if (!cyRef.current) return;
+    cyRef.current.elements().removeClass('expanding');
+    if (expandingNode) {
+      const el = cyRef.current.getElementById(expandingNode);
+      if (el.length) el.addClass('expanding');
+    }
+  }, [expandingNode]);
+
   const fit     = () => cyRef.current?.animate({ fit: { padding: 50 }, duration: 400, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' });
   const zoomIn  = () => { const cy = cyRef.current; if (cy) cy.animate({ zoom: { level: cy.zoom()*1.4, renderedPosition:{x:cy.width()/2,y:cy.height()/2} }, duration:250 }); };
   const zoomOut = () => { const cy = cyRef.current; if (cy) cy.animate({ zoom: { level: cy.zoom()/1.4, renderedPosition:{x:cy.width()/2,y:cy.height()/2} }, duration:250 }); };
@@ -203,6 +245,19 @@ export default function GraphView({ graphData, onNodeClick, selectedNode, highli
   return (
     <div className="relative h-full overflow-hidden" id="graph-view">
       <div ref={containerRef} className="w-full h-full bg-[#F8FAFC]" />
+
+      {/* Expand Hint on Hover */}
+      {expandHint && !expandingNode && (
+        <div 
+          className="absolute z-30 pointer-events-none"
+          style={{ left: expandHint.x - 60, top: expandHint.y - 10 }}
+        >
+          <div className="bg-slate-800/90 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold flex items-center gap-1.5 whitespace-nowrap backdrop-blur-md">
+            <MousePointerClick size={12} />
+            Double-click to expand
+          </div>
+        </div>
+      )}
 
       {/* Enhanced Tooltip */}
       {tooltip && (
@@ -230,9 +285,9 @@ export default function GraphView({ graphData, onNodeClick, selectedNode, highli
       {/* Control Surface — bottom right */}
       <div className="absolute bottom-6 right-6 flex flex-col gap-2 z-10">
         {[
-          { icon: <Plus size={16} strokeWidth={2.5} />,    fn: zoomIn,  title: 'Optimize zoom'   },
-          { icon: <Minus size={16} strokeWidth={2.5} />,   fn: zoomOut, title: 'Expand perspective'  },
-          { icon: <Maximize size={16} strokeWidth={2.5} />, fn: fit,     title: 'Re-center network' },
+          { icon: <Plus size={16} strokeWidth={2.5} />,    fn: zoomIn,  title: 'Zoom in'   },
+          { icon: <Minus size={16} strokeWidth={2.5} />,   fn: zoomOut, title: 'Zoom out'  },
+          { icon: <Maximize size={16} strokeWidth={2.5} />, fn: fit,     title: 'Fit to screen' },
         ].map((b, i) => (
           <button key={i} onClick={b.fn} title={b.title}
             className="w-10 h-10 flex items-center justify-center bg-white border border-slate-200

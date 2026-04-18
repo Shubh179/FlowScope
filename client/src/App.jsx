@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import SearchBar from './components/SearchBar';
 import HSNSelector from './components/HSNSelector';
@@ -18,6 +18,11 @@ export default function App() {
   const [stats,     setStats]     = useState(null);
   const [error,     setError]     = useState(null);
   const [traceLog,  setTraceLog]  = useState('');
+  const [expandingNode, setExpandingNode] = useState(null); // track which node is being expanded
+
+  // Keep a ref to graphData so expandNode always has the latest
+  const graphRef = useRef(null);
+  useEffect(() => { graphRef.current = graphData; }, [graphData]);
 
   useEffect(() => {
     axios.get('/api/graph/stats').then(({ data }) => setStats(data.stats)).catch(() => {});
@@ -52,6 +57,86 @@ export default function App() {
       setLoading(false);
     }
   }, []);
+
+  // ─── EXPAND NODE: Click a node to recursively discover its suppliers ───
+  const expandNode = useCallback(async (node) => {
+    if (!node || !node.name) return;
+    
+    // Find the node's HS code from existing edges (what does this node supply?)
+    const current = graphRef.current;
+    if (!current) return;
+
+    // Determine the HS code to trace — look for edges where this node is the source
+    let traceHsCode = null;
+    for (const edge of current.edges) {
+      if (edge.source === node.name) {
+        traceHsCode = edge.hsn;
+        break;
+      }
+    }
+    // If no outgoing edge, look for incoming edges (what is supplied to this node)
+    if (!traceHsCode) {
+      for (const edge of current.edges) {
+        if (edge.target === node.name) {
+          traceHsCode = edge.hsn;
+          break;
+        }
+      }
+    }
+    // Fallback: use the current HSN filter
+    if (!traceHsCode) traceHsCode = hsn || '87';
+
+    setExpandingNode(node.name);
+    setTraceLog(`Expanding ${node.name}...`);
+
+    try {
+      const payload = {
+        companyName: node.name,
+        companyCountry: node.country || 'Unknown',
+        targetHsCode: traceHsCode,
+        hsnDescription: '',
+        maxTiers: 2, // 2 tiers from this sub-node
+      };
+
+      const { data } = await axios.post('/api/trace/expand', payload, { timeout: 120000 });
+
+      // ─── MERGE new data into existing graph (don't replace!) ───
+      setGraphData(prev => {
+        if (!prev) return {
+          nodes: data.nodes || [],
+          edges: data.edges || [],
+          tradeRoutes: data.tradeRoutes || [],
+        };
+
+        // Merge nodes (deduplicate by id)
+        const existingNodeIds = new Set(prev.nodes.map(n => n.id));
+        const newNodes = (data.nodes || []).filter(n => !existingNodeIds.has(n.id));
+
+        // Merge edges (deduplicate by source+target+hsn)
+        const existingEdgeKeys = new Set(prev.edges.map(e => `${e.source}→${e.target}→${e.hsn}`));
+        const newEdges = (data.edges || []).filter(e => !existingEdgeKeys.has(`${e.source}→${e.target}→${e.hsn}`));
+
+        // Merge trade routes
+        const existingRouteKeys = new Set(prev.tradeRoutes?.map(r => `${r.from}→${r.to}`) || []);
+        const newRoutes = (data.tradeRoutes || []).filter(r => !existingRouteKeys.has(`${r.from}→${r.to}`));
+
+        return {
+          nodes: [...prev.nodes, ...newNodes],
+          edges: [...prev.edges, ...newEdges],
+          tradeRoutes: [...(prev.tradeRoutes || []), ...newRoutes],
+        };
+      });
+
+      const addedNodes = data.nodes?.length ? data.nodes.length - 1 : 0; // -1 for the anchor
+      setTraceLog(`Expanded ${node.name}: +${addedNodes} new suppliers found`);
+
+    } catch (err) {
+      console.error('Expand failed:', err);
+      setTraceLog(`Failed to expand ${node.name}`);
+    } finally {
+      setExpandingNode(null);
+    }
+  }, [hsn]);
 
   const selectCompany = (c) => {
     setCompany(c); setHsn(null); setHsnDesc('');
@@ -190,9 +275,30 @@ export default function App() {
               <GraphView 
                 graphData={graphData} 
                 onNodeClick={setSelNode} 
+                onExpandNode={expandNode}
+                expandingNode={expandingNode}
                 selectedNode={selNode?.name || selNode?.id}
                 highlightCompany={company?.name}
               />
+
+              {/* Expand Status Banner */}
+              {expandingNode && (
+                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 
+                                bg-blue-600 text-white px-5 py-2.5 rounded-2xl shadow-xl
+                                flex items-center gap-3 animate-pulse">
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"/>
+                  <span className="text-sm font-bold">Expanding {expandingNode}...</span>
+                </div>
+              )}
+
+              {/* Trace Log */}
+              {traceLog && !loading && !expandingNode && (
+                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20
+                                bg-white/90 backdrop-blur-md text-slate-600 px-4 py-2 rounded-xl shadow-sm
+                                border border-slate-200 text-xs font-bold">
+                  {traceLog}
+                </div>
+              )}
             </div>
           )}
         </main>
