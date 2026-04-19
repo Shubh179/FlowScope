@@ -63,40 +63,65 @@ export default function MapView({ tradeRoutes = [], nodes = [] }) {
         <MapController tradeRoutes={validRoutes} />
 
         {/* Trade Route Arcs (Polylines) with Flow Animation */}
-        {validRoutes.map((route, i) => (
-          <Polyline 
-            key={`route-${i}`}
-            positions={[route.from, route.to]}
-            pathOptions={{
-              color: '#2563EB',
-              weight: 2,
-              opacity: 0.8,
-              dashArray: '10, 10',
-              lineJoin: 'round',
-              className: 'animate-flow'
-            }}
-          >
-            <Popup>
-              <div className="p-1">
-                 <div className="text-[10px] font-black text-blue-600 uppercase mb-1">Trade Flux</div>
-                 <div className="text-[11px] font-bold text-slate-700">{route.fromName} → {route.toName}</div>
-                 <div className="text-[10px] text-slate-400 mt-1">{route.product}</div>
-              </div>
-            </Popup>
-          </Polyline>
-        ))}
+        {validRoutes.map((route, i) => {
+          const color = route.type === 'IMPORT' ? '#2563EB' : '#9333EA'; // Blue for direct, Purple for upstream
+          
+          return (
+            <div key={`group-${i}`}>
+              <Polyline 
+                positions={[route.from, route.to]}
+                pathOptions={{
+                  color: color,
+                  weight: 2.5,
+                  opacity: 0.8,
+                  dashArray: '10, 10',
+                  lineJoin: 'round',
+                  className: 'animate-flow'
+                }}
+              />
+              {/* Permanent HSN Label on Path */}
+              <Marker 
+                position={[(route.from[0] + route.to[0])/2, (route.from[1] + route.to[1])/2]} 
+                icon={L.divIcon({
+                  className: 'hsn-label-on-path',
+                  html: `<div style="background: ${color}; color: white; font-size: 9px; font-weight: 900; padding: 2px 6px; border-radius: 4px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); white-space: nowrap;">HS ${route.hsn}</div>`,
+                  iconSize: [40, 14],
+                  iconAnchor: [20, 7]
+                })}
+                interactive={false}
+              />
+              {/* Directional Arrow at Destination */}
+              <Marker 
+                position={route.to}
+                icon={L.divIcon({
+                  className: 'flow-arrow',
+                  html: `<div style="color: ${color}; transform: rotate(${Math.atan2(route.to[0]-route.from[0], route.to[1]-route.from[1])}rad); font-size: 14px; font-weight: bold;">▶</div>`,
+                  iconSize: [20, 20],
+                  iconAnchor: [10, 10]
+                })}
+                interactive={false}
+              />
+            </div>
+          );
+        })}
 
         {/* Markers for Countries */}
         {relevantNodes.map((n, i) => (
           <Marker 
             key={`marker-${i}`}
             position={n.coords}
-            icon={createMarkerIcon('#3B82F6')}
+            icon={createMarkerIcon(n.tier === 0 ? '#2563EB' : '#475569')}
           >
             <Popup>
-              <div className="p-1">
-                <div className="text-[11px] font-bold text-slate-800">{n.country}</div>
-                <div className="text-[10px] text-slate-400 mt-0.5 uppercase tracking-wider">Logistics Hub</div>
+              <div className="p-2 min-w-[200px]">
+                <div className="flex items-center gap-2 mb-2">
+                   <div className="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-[9px] font-black uppercase">Tier {n.tier}</div>
+                   <div className="text-[11px] font-black text-slate-800">{n.label}</div>
+                </div>
+                <div className="text-[10px] bg-slate-50 p-2 rounded border border-slate-100 text-slate-500 leading-relaxed italic">
+                  "{n.description}"
+                </div>
+                <div className="text-[9px] text-slate-400 mt-2 uppercase font-bold tracking-widest text-right">{n.country}</div>
               </div>
             </Popup>
           </Marker>

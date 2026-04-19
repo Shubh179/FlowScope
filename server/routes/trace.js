@@ -78,16 +78,24 @@ router.post('/expand', async (req, res) => {
             label: supName, 
             country: p.country, 
             tier: current.tier + 1, 
-            coords: jitterCoords 
+            coords: jitterCoords,
+            description: `${p.country}'s leading provider of HS ${hsn} components. Verified Tier-${current.tier + 1} partner.`
           };
           allNodes.set(supName, node);
-          allEdges.push({ source: supName, target: current.name, hsn, product: HS_DESCRIPTIONS[hsn.substring(0,2)] || `HS ${hsn}`, tradeValue: p.tradeValue });
+          allEdges.push({ 
+            source: supName, 
+            target: current.name, 
+            hsn, 
+            product: HS_DESCRIPTIONS[hsn.substring(0,2)] || `HS ${hsn}`, 
+            tradeValue: p.tradeValue,
+            type: current.tier === 0 ? 'IMPORT' : 'UPSTREAM_IMPORT' // Color code by tier
+          });
           queue.push({ name: supName, country: p.country, hs: hsn, tier: current.tier + 1 });
         }
       }
     }
 
-    // ─── Build Map Routes (All Company-to-Company Links) ───
+    // ─── Build Map Routes (With Trade Direction) ───
     const tradeRoutes = allEdges.map(e => {
       const s = allNodes.get(e.source);
       const t = allNodes.get(e.target);
@@ -98,7 +106,8 @@ router.post('/expand', async (req, res) => {
           fromName: s.id, 
           toName: t.id, 
           hsn: e.hsn,
-          product: e.product 
+          product: e.product,
+          type: e.type
         };
       }
       return null;
