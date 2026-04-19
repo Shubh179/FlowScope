@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutDashboard, Cloud, Search as SearchIcon, ChevronLeft, ChevronRight, Info, Package, ArrowRightLeft, X, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, Cloud, Search as SearchIcon, ChevronLeft, ChevronRight, Info, Package, ArrowRightLeft, X, BarChart3, History, Clock } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import SearchBar from './components/SearchBar';
 import HSNSelector from './components/HSNSelector';
@@ -26,28 +26,73 @@ export default function App() {
   const [traceLog,  setTraceLog]  = useState('');
   const [expandingNode, setExpandingNode] = useState(null);
   const [showAnalytics, setShowAnalytics] = useState(false);
+  const [searchHistory, setSearchHistory] = useState([]);
 
   const graphRef = useRef(null);
+  const historyRef = useRef([]);
   useEffect(() => { graphRef.current = graphData; }, [graphData]);
+  useEffect(() => { historyRef.current = searchHistory; }, [searchHistory]);
 
   useEffect(() => {
     axios.get('/api/graph/stats').then(({ data }) => setStats(data.stats)).catch(() => {});
   }, []);
 
-  // 📝 fetchGraph ONLY implements the network after a BOM filter is clicked
+  // 🗂️ Cache key helper
+  const makeCacheKey = (companyName, hsnCode) => `${companyName}::${hsnCode}`;
+
+  // 📝 fetchGraph — checks cache first, then calls API if not cached
   const fetchGraph = useCallback(async (c, h, desc) => {
     if (!c || !h) return;
+    const cacheKey = makeCacheKey(c.name, h);
+
+    // Check cache first
+    const cached = historyRef.current.find(entry => entry.cacheKey === cacheKey);
+    if (cached) {
+      setGraphData(cached.graphData);
+      setTraceLog(`CACHED · ${cached.graphData.nodes.length} PARTNERS`);
+      return;
+    }
+
     setLoading(true); setError(null); setTraceLog('SYNTHESIZING NETWORK FOR ' + h + '...');
     try {
       const payload = { companyName: c.name, companyCountry: c.country || 'Unknown', targetHsCode: h, hsnDescription: desc || '', maxTiers: 3 };
       const { data } = await axios.post('/api/trace/expand', payload, { timeout: 120000 });
-      setGraphData({ nodes: data.nodes || [], edges: data.edges || [], tradeRoutes: data.tradeRoutes || [] });
+      const result = { nodes: data.nodes || [], edges: data.edges || [], tradeRoutes: data.tradeRoutes || [] };
+      setGraphData(result);
       setTraceLog(`VIEWING ${data.meta?.totalNodes || 0} PARTNERS`);
+
+      // Save to history cache (max 10 entries)
+      setSearchHistory(prev => {
+        const exists = prev.some(e => e.cacheKey === cacheKey);
+        if (exists) return prev;
+        const entry = {
+          cacheKey,
+          companyName: c.name,
+          companyCountry: c.country,
+          hsn: h,
+          hsnDesc: desc || h,
+          graphData: result,
+          nodeCount: result.nodes.length,
+          edgeCount: result.edges.length,
+          timestamp: Date.now(),
+        };
+        return [entry, ...prev].slice(0, 10);
+      });
     } catch (err) {
       setError('Trace engine error. Try again.');
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  // 🔁 Restore a previous search from history (no API call) + open analytics
+  const restoreFromHistory = useCallback((entry) => {
+    setCompany({ name: entry.companyName, country: entry.companyCountry });
+    setHsn(entry.hsn);
+    setHsnDesc(entry.hsnDesc);
+    setGraphData(entry.graphData);
+    setTraceLog(`CACHED · ${entry.nodeCount} PARTNERS`);
+    setPage('analytics');
   }, []);
 
   const expandNode = useCallback(async (node) => {
@@ -232,6 +277,54 @@ export default function App() {
                               );
                             })()}
                          </div>
+                      </div>
+                    )}
+
+                    {/* 🕓 SEARCH HISTORY (cached results) */}
+                    {searchHistory.length > 0 && (
+                      <div className="pt-6 border-t border-gray-100">
+                        <div className="flex items-center gap-2 mb-4">
+                          <Clock size={16} className="text-black" />
+                          <span className="font-black text-[10px] uppercase tracking-wider text-black">History</span>
+                          <span className="text-[9px] font-bold text-gray-300 ml-auto">{searchHistory.length} cached</span>
+                        </div>
+                        <div className="space-y-2">
+                          {searchHistory.map((entry, i) => {
+                            const isActive = entry.companyName === company?.name && entry.hsn === hsn;
+                            const ago = Math.round((Date.now() - entry.timestamp) / 60000);
+                            const timeLabel = ago < 1 ? 'just now' : ago < 60 ? `${ago}m ago` : `${Math.round(ago / 60)}h ago`;
+                            return (
+                              <button
+                                key={entry.cacheKey}
+                                onClick={() => restoreFromHistory(entry)}
+                                className={`w-full flex items-center gap-3 p-3 rounded-xl border transition-all text-left group ${
+                                  isActive
+                                    ? 'bg-black text-white border-black'
+                                    : 'bg-gray-50 hover:bg-white border-gray-100 hover:border-gray-300 hover:shadow-sm'
+                                }`}
+                              >
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-black shrink-0 ${
+                                  isActive ? 'bg-white/20 text-white' : 'bg-white text-gray-600 border border-gray-200'
+                                }`}>
+                                  {entry.nodeCount}
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <div className={`text-[10px] font-black truncate ${isActive ? 'text-white' : 'text-gray-700'}`}>
+                                    {entry.companyName}
+                                  </div>
+                                  <div className={`text-[9px] font-bold mt-0.5 flex items-center gap-1.5 ${isActive ? 'text-white/60' : 'text-gray-400'}`}>
+                                    <span>HSN {entry.hsn}</span>
+                                    <span>·</span>
+                                    <span>{timeLabel}</span>
+                                  </div>
+                                </div>
+                                {!isActive && (
+                                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.5)] shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
                     )}
                   </div>
