@@ -12,6 +12,7 @@ const QUICK = ['isuzu','škoda auto','cage warriors','kaipan','ineos group'];
 
 export default function App() {
   const [page, setPage] = useState('dashboard');
+  const [viewMode, setViewMode] = useState('split'); // 'graph', 'map', 'split'
   
   // Graph/Trace states
   const [company,   setCompany]   = useState(null);
@@ -34,7 +35,7 @@ export default function App() {
   }, []);
 
   const fetchGraph = useCallback(async (c, h, desc) => {
-    if (!c || !h || h === 'all') return;
+    if (!c || !h) return;
     setLoading(true); setError(null); setTraceLog('Connecting to AI trace engine...');
     try {
       const payload = {
@@ -156,8 +157,8 @@ export default function App() {
     }
     setHsn(code);
     setHsnDesc(description || '');
-    if (company && code !== 'all') {
-      fetchGraph(company, code, description);
+    if (company) {
+      fetchGraph(company, code === 'all' ? '87' : code, description);
     }
   };
 
@@ -244,8 +245,27 @@ export default function App() {
                   </h2>
                 </div>
                 <div className="flex-1 overflow-y-auto">
-                  <SearchBar onSelect={selectCompany} selected={company} />
-                  {company && <HSNSelector selected={hsn} onSelect={selectHsn} />}
+                  <SearchBar onCompanySelect={selectCompany} />
+                  {company && <HSNSelector companyName={company.name} selectedHSN={hsn} onHSNSelect={selectHsn} />}
+                  
+                  {company && (
+                    <div className="px-4 py-4 mt-2 border-t border-slate-100">
+                      <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">View Mode</div>
+                      <div className="flex bg-slate-100 p-1 rounded-xl">
+                        {[
+                          { id: 'graph', label: 'Network' },
+                          { id: 'split', label: 'Dual View' },
+                          { id: 'map',   label: 'Global' },
+                        ].map(v => (
+                          <button key={v.id} onClick={() => setViewMode(v.id)}
+                            className={`flex-1 flex items-center justify-center py-1.5 rounded-lg text-[10px] font-black uppercase tracking-tight transition-all
+                              ${viewMode === v.id ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}>
+                            {v.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
               
@@ -282,8 +302,8 @@ export default function App() {
                       </div>
                     )}
                     {!hsn && !loading && (
-                      <div className="h-full flex items-center justify-center">
-                        <div className="text-center max-w-sm px-6">
+                      <div className="absolute inset-0 flex items-center justify-center z-30 bg-white/60 backdrop-blur-sm">
+                        <div className="text-center max-w-sm px-6 bg-white p-6 rounded-2xl shadow-lg border border-slate-100">
                           <div className="text-4xl mb-4">🏭</div>
                           <h3 className="text-lg font-bold text-slate-700 mb-2">Select an HSN Code</h3>
                           <p className="text-sm text-slate-400">
@@ -292,14 +312,28 @@ export default function App() {
                         </div>
                       </div>
                     )}
-                    <GraphView 
-                      graphData={graphData} 
-                      onNodeClick={setSelNode} 
-                      onExpandNode={expandNode}
-                      expandingNode={expandingNode}
-                      selectedNode={selNode?.name || selNode?.id}
-                      highlightCompany={company?.name}
-                    />
+                    
+                    {/* SPLIT VIEW DRIVER — always rendered, overlays sit on top */}
+                    <div className="absolute inset-0 flex">
+                      {/* GRAPH PANEL */}
+                      <div className={`transition-all duration-500 border-r border-slate-200 bg-white h-full
+                        ${viewMode === 'map' ? 'w-0 opacity-0 pointer-events-none' : 'flex-1'} relative`}>
+                        <GraphView 
+                          graphData={graphData} 
+                          onNodeClick={setSelNode} 
+                          onExpandNode={expandNode}
+                          expandingNode={expandingNode}
+                          selectedNode={selNode?.name || selNode?.id}
+                          highlightCompany={company?.name}
+                        />
+                      </div>
+
+                      {/* MAP PANEL */}
+                      <div className={`transition-all duration-500 bg-[#e8ecf1] h-full
+                        ${viewMode === 'graph' ? 'w-0 opacity-0 pointer-events-none' : 'flex-1'} relative`}>
+                        <MapView tradeRoutes={graphData?.tradeRoutes} nodes={graphData?.nodes} />
+                      </div>
+                    </div>
 
                     {/* Expand Status Banner */}
                     {expandingNode && (
@@ -324,7 +358,7 @@ export default function App() {
               </div>
               
               {/* Right Details */}
-              <DetailsPanel node={selNode} onClose={() => setSelNode(null)} />
+              <DetailsPanel selectedCompany={company} selectedNode={selNode} />
             </div>
           ) : (
             <div className="flex items-center justify-center h-full text-gray-400">

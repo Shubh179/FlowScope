@@ -12,6 +12,14 @@ const dashboardRouter = require('./routes/dashboard');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// ─── Prevent server crash on unhandled errors ───
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[Server] Unhandled Promise Rejection:', reason?.message || reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[Server] Uncaught Exception:', err.message);
+});
+
 // ─── Middleware ───
 app.use(cors());
 app.use(express.json());

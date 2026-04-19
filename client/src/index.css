@@ -25,3 +25,104 @@
 ::-webkit-scrollbar-thumb:hover {
   @apply bg-gray-400;
 }
+
+/* Cytoscape Tooltip Styling */
+.cy-tooltip {
+  @apply fixed z-[9999] pointer-events-none bg-white p-4 rounded-3xl shadow-lg border border-slate-100 backdrop-blur-md transition-opacity duration-200;
+}
+
+/* ═══════════════════════════════════════════════════
+   LEAFLET MAP — Critical Overrides
+   ═══════════════════════════════════════════════════ */
+
+/* DO NOT apply brightness/contrast filters — they dim the map */
+.leaflet-container {
+  z-index: 0;
+  border-radius: 0;
+  overflow: hidden;
+  background: #e8ecf1 !important;
+  font-family: 'Inter', sans-serif;
+}
+
+/* Make sure tiles load at full brightness */
+.leaflet-tile-pane {
+  filter: none !important;
+}
+
+/* Popup styling — using light theme so popups are readable */
+.premium-popup .leaflet-popup-content-wrapper {
+  border-radius: 16px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  padding: 0;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #1e293b;
+}
+
+.premium-popup .leaflet-popup-tip {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+}
+
+.premium-popup .leaflet-popup-content {
+  margin: 0;
+}
+
+/* Custom Marker Glow */
+.custom-map-marker {
+  background: none !important;
+  border: none !important;
+}
+
+.map-marker-glow {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+}
+
+.marker-dot {
+  width: 10px;
+  height: 10px;
+  background: #2563EB;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  z-index: 2;
+  box-shadow: 0 0 10px #2563EB, 0 0 4px #fff;
+}
+
+.marker-pulse {
+  position: absolute;
+  width: 28px;
+  height: 28px;
+  background: rgba(37, 99, 235, 0.3);
+  border-radius: 50%;
+  animation: marker-pulse-anim 2s ease-out infinite;
+  z-index: 1;
+}
+
+@keyframes marker-pulse-anim {
+  0% { transform: scale(0.5); opacity: 0.8; }
+  100% { transform: scale(2.5); opacity: 0; }
+}
+
+/* Animated flowing routes */
+.route-line {
+  animation: route-flow 15s linear infinite;
+}
+
+@keyframes route-flow {
+  from { stroke-dashoffset: 500; }
+  to { stroke-dashoffset: 0; }
+}
+
+.animate-flow {
+  stroke-dasharray: 10, 10;
+  animation: flow-dash 20s linear infinite;
+}
+
+@keyframes flow-dash {
+  to { stroke-dashoffset: -1000; }
+}

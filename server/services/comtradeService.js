@@ -90,7 +90,7 @@ class ComtradeService {
    * 
    * Returns array of { country, tradeValue } objects.
    */
-  async getTopPartners(reporterCountry, hsCode) {
+  async getTopPartners(reporterCountry, hsCode, retries = 2) {
     const reporterCode = getM49(reporterCountry);
 
     if (!reporterCode) {
@@ -98,10 +98,7 @@ class ComtradeService {
       return [];
     }
 
-    // Normalize HS code to 2-digit chapter for broader results from the preview API
     const cmdCode = String(hsCode).substring(0, 2);
-
-    // Check cache first
     const cacheKey = `${reporterCode}:${cmdCode}`;
     if (this.cache.has(cacheKey)) {
       console.log(`[Comtrade] Cache hit for ${reporterCountry} importing HS ${cmdCode}`);
@@ -110,56 +107,62 @@ class ComtradeService {
 
     console.log(`[Comtrade] GET imports of HS ${cmdCode} into ${reporterCountry} (M49: ${reporterCode})`);
 
-    try {
-      // Correct URL structure: /public/v1/preview/{typeCode}/{freqCode}/{clCode}
-      const response = await axios.get('https://comtradeapi.un.org/public/v1/preview/C/A/HS', {
-        params: {
-          reporterCode: reporterCode,
-          cmdCode: cmdCode,
-          flowCode: 'M',        // M = Import
-          period: '2022',
-          partnerCode: '',      // Empty = all partners
-        },
-        timeout: 15000,
-      });
+    const performRequest = async (attempt) => {
+      try {
+        const response = await axios.get('https://comtradeapi.un.org/public/v1/preview/C/A/HS', {
+          params: {
+            reporterCode: reporterCode,
+            cmdCode: cmdCode,
+            flowCode: 'M',
+            period: '2022',
+            partnerCode: '',
+          },
+          timeout: 30000, // 30s timeout
+        });
 
-      const records = response.data?.data || [];
-      if (records.length === 0) {
-        console.log(`[Comtrade] No records returned.`);
-        return [];
-      }
+        const records = response.data?.data || [];
+        if (records.length === 0) return [];
 
-      // Filter out World aggregate (code 0) and self-trade
-      const valid = records.filter(t =>
-        t.partnerCode !== 0 &&
-        String(t.partnerCode) !== '0' &&
-        String(t.partnerCode) !== reporterCode
-      );
+        const valid = records.filter(t =>
+          t.partnerCode !== 0 &&
+          String(t.partnerCode) !== '0' &&
+          String(t.partnerCode) !== reporterCode
+        );
 
-      valid.sort((a, b) => (b.primaryValue || 0) - (a.primaryValue || 0));
+        valid.sort((a, b) => (b.primaryValue || 0) - (a.primaryValue || 0));
 
-      // Unique by partner code
-      const uniquePartners = [];
-      const seen = new Set();
-      for (const t of valid) {
-        if (!seen.has(t.partnerCode)) {
-          seen.add(t.partnerCode);
-          uniquePartners.push(t);
+        const uniquePartners = [];
+        const seen = new Set();
+        for (const t of valid) {
+          if (!seen.has(t.partnerCode)) {
+            seen.add(t.partnerCode);
+            uniquePartners.push(t);
+          }
         }
+
+        const top = uniquePartners.slice(0, 5).map(t => ({
+          country: getCountryName(t.partnerCode),
+          tradeValue: t.primaryValue || 0,
+          partnerCode: t.partnerCode,
+        }));
+
+        this.cache.set(cacheKey, top);
+        return top;
+      } catch (error) {
+        if (error.response?.status === 429 && attempt < retries) {
+          const wait = Math.pow(2, attempt) * 2000;
+          console.warn(`[Comtrade] Rate limited (429). Retrying in ${wait}ms...`);
+          await new Promise(r => setTimeout(r, wait));
+          return performRequest(attempt + 1);
+        }
+        throw error;
       }
+    };
 
-      const top = uniquePartners.slice(0, 5).map(t => ({
-        country: getCountryName(t.partnerCode),
-        tradeValue: t.primaryValue || 0,
-        partnerCode: t.partnerCode,
-      }));
-
-      console.log(`[Comtrade] Top partners: ${top.map(t => `${t.country} ($${(t.tradeValue/1e6).toFixed(0)}M)`).join(', ')}`);
-      this.cache.set(cacheKey, top);
-      return top;
-
+    try {
+      return await performRequest(0);
     } catch (error) {
-      console.error(`[Comtrade] API error: ${error.message}`);
+      console.error(`[Comtrade] Final API error: ${error.message}`);
       return [];
     }
   }

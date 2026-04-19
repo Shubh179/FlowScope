@@ -43,10 +43,10 @@ export default function MapView({ tradeRoutes = [], nodes = [] }) {
     Array.isArray(r.to) && r.to.length === 2
   );
 
-  // Relevant nodes are those participating in valid routes
+  // Relevant nodes are those with valid coordinates
   const relevantNodes = (nodes || []).filter(n => 
     n.coords && Array.isArray(n.coords) && n.coords.length === 2 &&
-    validRoutes.some(r => r.fromName === n.country || r.toName === n.country)
+    !isNaN(n.coords[0]) && !isNaN(n.coords[1])
   );
 
   return (
@@ -62,19 +62,28 @@ export default function MapView({ tradeRoutes = [], nodes = [] }) {
         
         <MapController tradeRoutes={validRoutes} />
 
-        {/* Trade Route Arcs (Polylines) */}
+        {/* Trade Route Arcs (Polylines) with Flow Animation */}
         {validRoutes.map((route, i) => (
           <Polyline 
             key={`route-${i}`}
             positions={[route.from, route.to]}
             pathOptions={{
-              color: '#3B82F6',
-              weight: 1.5,
-              opacity: 0.6,
-              dashArray: '5, 8',
-              lineJoin: 'round'
+              color: '#2563EB',
+              weight: 2,
+              opacity: 0.8,
+              dashArray: '10, 10',
+              lineJoin: 'round',
+              className: 'animate-flow'
             }}
-          />
+          >
+            <Popup>
+              <div className="p-1">
+                 <div className="text-[10px] font-black text-blue-600 uppercase mb-1">Trade Flux</div>
+                 <div className="text-[11px] font-bold text-slate-700">{route.fromName} → {route.toName}</div>
+                 <div className="text-[10px] text-slate-400 mt-1">{route.product}</div>
+              </div>
+            </Popup>
+          </Polyline>
         ))}
 
         {/* Markers for Countries */}

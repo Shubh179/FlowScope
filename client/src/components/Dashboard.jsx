@@ -6,7 +6,7 @@ import {
 } from 'recharts';
 import {
   ChevronDown, ChevronRight, ArrowUpRight, ArrowDownRight,
-  Share2, RefreshCw, FileText
+  RefreshCw, FileText
 } from 'lucide-react';
 
 const COLORS = ['#D1D5DB', '#9CA3AF', '#6B7280', '#374151'];
@@ -47,9 +47,11 @@ export default function Dashboard() {
     setNewsLoading(true);
     try {
       const res = await axios.get(`/api/news?q=${encodeURIComponent(query)}`);
-      setNews(res.data.results || []);
+      // Ensure we always have an array even if the API returns an error structure
+      setNews(Array.isArray(res.data?.results) ? res.data.results : []);
     } catch (error) {
       console.error("Error fetching news:", error);
+      setNews([]);
     } finally {
       setNewsLoading(false);
     }
@@ -64,7 +66,16 @@ export default function Dashboard() {
   useEffect(() => {
     axios.get('/api/dashboard')
       .then(({ data }) => setData(data))
-      .catch(console.error)
+      .catch(err => {
+        console.error("Dashboard fetch error:", err);
+        // Fallback or empty state to prevent crash
+        setData({
+          topCompanies: [],
+          topCountries: [],
+          topSectors: [],
+          recentActivity: []
+        });
+      })
       .finally(() => setLoading(false));
       
     fetchNews();
@@ -73,11 +84,11 @@ export default function Dashboard() {
   if (loading || !data) return (
     <div className="flex items-center justify-center h-full text-gray-400">
       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-800 mr-3"></div>
-      Connecting...
+      Connecting to Intelligence Engine...
     </div>
   );
 
-  const { topCompanies, topCountries, topSectors, recentActivity } = data;
+  const { topCompanies = [], topCountries = [], topSectors = [] } = data;
 
   return (
     <div className="min-h-full p-6 flex gap-6 text-gray-900 bg-[#F9FAFB]">
@@ -162,14 +173,14 @@ export default function Dashboard() {
           <div className="w-[320px] bg-white border border-gray-200 rounded-xl p-6 shadow-sm flex flex-col shrink-0">
             <h3 className="text-base font-semibold mb-4">Export-to-Import Ratio</h3>
             <div className="flex items-center justify-between border border-gray-200 rounded-lg p-3 mb-6 text-sm">
-               <span className="font-medium text-gray-700 truncate">Tesla Inc. <span className="text-gray-400 font-normal ml-1">noteep)</span></span>
+               <span className="font-medium text-gray-700 truncate">Global Ratio <span className="text-gray-400 font-normal ml-1">avg</span></span>
                <span className="font-bold flex items-center gap-1.5"><span className="text-gray-400 text-xs">⊘</span> 1.26</span>
             </div>
             <div className="flex-1 flex items-center justify-between pl-2 min-h-0">
                <div className="flex flex-col gap-5 text-xs text-gray-500 font-medium">
-                  <div className="flex items-center gap-3"><div className="w-4 h-1.5 bg-gray-400 rounded-full"></div> 54.2X</div>
-                  <div className="flex items-center gap-3"><div className="w-4 h-1.5 bg-gray-300 rounded-full"></div> 950K</div>
-                  <div className="flex items-center gap-3"><div className="w-4 h-1.5 bg-gray-200 rounded-full"></div> 738K</div>
+                  <div className="flex items-center gap-3"><div className="w-4 h-1.5 bg-gray-400 rounded-full"></div> Growth</div>
+                  <div className="flex items-center gap-3"><div className="w-4 h-1.5 bg-gray-300 rounded-full"></div> Volume</div>
+                  <div className="flex items-center gap-3"><div className="w-4 h-1.5 bg-gray-200 rounded-full"></div> Balance</div>
                </div>
                <div className="w-28 h-28 relative mr-4 shrink-0">
                   <ResponsiveContainer width="100%" height="100%">
@@ -182,10 +193,8 @@ export default function Dashboard() {
                   </ResponsiveContainer>
                   <div className="absolute inset-0 flex flex-col items-center justify-center pt-1">
                     <div className="text-2xl font-bold leading-none text-gray-900">1.26</div>
-                    <div className="text-[7px] text-gray-500 font-medium mt-1.5 uppercase text-center leading-tight">Export / Import</div>
+                    <div className="text-[7px] text-gray-500 font-medium mt-1.5 uppercase text-center leading-tight">Ratio</div>
                   </div>
-                  <div className="absolute -bottom-2 -left-2 text-[10px] text-gray-400">000</div>
-                  <div className="absolute -bottom-2 -right-2 text-[10px] text-gray-400">230</div>
                </div>
             </div>
           </div>
@@ -195,15 +204,17 @@ export default function Dashboard() {
         <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm flex flex-col flex-1">
           <h3 className="text-base font-semibold mb-6 shrink-0">Top Sectors by Trade Volume</h3>
           <div className="flex-1 flex flex-col justify-evenly">
-             {topSectors.slice(0, 3).map((s, i) => (
+             {(!topSectors || topSectors.length === 0) ? (
+               <div className="text-sm text-gray-400 italic">No sector data available.</div>
+             ) : topSectors.slice(0, 3).map((s, i) => (
                <div key={i} className="flex items-center gap-4 text-sm">
                   <div className="w-2.5 h-2.5 rounded-full bg-gray-400 shrink-0"></div>
                   <span className="w-48 truncate text-gray-600 font-medium">{s.product}</span>
                   <div className="flex-1 h-2.5 bg-gray-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-gray-400 rounded-full" style={{width: `${(s.volume/topSectors[0].volume)*100}%`}}></div>
+                    <div className="h-full bg-gray-400 rounded-full" style={{width: `${topSectors[0]?.volume ? (s.volume/topSectors[0].volume)*100 : 0}%`}}></div>
                   </div>
                   <span className="font-bold w-16 text-right">{fmt(s.volume)}</span>
-                  <span className="text-gray-400 w-16 text-right font-medium">+{((s.volume/topSectors[0].volume)*15).toFixed(1)}%</span>
+                  <span className="text-gray-400 w-16 text-right font-medium">+{topSectors[0]?.volume ? ((s.volume/topSectors[0].volume)*15).toFixed(1) : '0.0'}%</span>
                </div>
              ))}
           </div>
@@ -217,21 +228,21 @@ export default function Dashboard() {
          {/* Top Companies */}
          <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm flex flex-col">
            <div className="flex justify-between items-center mb-5">
-             <h3 className="text-base font-semibold">Top Companies by Sector</h3>
+             <h3 className="text-base font-semibold">Top Companies</h3>
              <div className="flex items-center gap-2 text-xs text-gray-500 border border-gray-200 px-2 py-1 rounded-md">
-               Today <span className="bg-gray-100 px-1.5 py-0.5 rounded ml-1 text-gray-700">1 yts <ChevronDown size={12} className="inline"/></span>
+               Global <ChevronDown size={12} className="inline ml-1"/>
              </div>
            </div>
            <div className="flex justify-between text-xs font-medium text-gray-400 mb-3 px-1">
              <span className="w-32">Company Name</span>
-             <span className="flex-1 text-right">Total Trade Volume</span>
-             <span className="w-20 text-right">Total Balance</span>
+             <span className="flex-1 text-right">Volume</span>
+             <span className="w-20 text-right">Balance</span>
            </div>
            <div className="space-y-4">
              {topCompanies.slice(0, 5).map((c, i) => (
                <div key={i} className="flex items-center text-sm border-b border-gray-50 pb-3 last:border-0 last:pb-0">
                  <span className="w-32 truncate font-medium text-gray-800">{c.name.split(' ')[0]}</span>
-                 <span className="flex-1 text-right font-semibold text-gray-600">{c.totalVolume.toLocaleString()}</span>
+                 <span className="flex-1 text-right font-semibold text-gray-600">{fmt(c.totalVolume)}</span>
                  <span className="w-20 text-right text-green-600 font-medium">+{c.percentOfMax}%</span>
                </div>
              ))}
@@ -241,8 +252,8 @@ export default function Dashboard() {
          {/* Top Countries */}
          <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm flex flex-col">
            <div className="flex justify-between items-center mb-5">
-             <h3 className="text-base font-semibold">Top Countries by Trade Volume</h3>
-             <span className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1 cursor-pointer">VIEW ALL <ChevronRight size={12}/></span>
+             <h3 className="text-base font-semibold">Top Partners</h3>
+             <span className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1 cursor-pointer">ALL <ChevronRight size={12}/></span>
            </div>
            <div className="space-y-5">
              {topCountries.slice(0, 5).map((c, i) => (
@@ -258,7 +269,7 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <div className="h-1.5 bg-gray-100 rounded-full w-full overflow-hidden mt-1">
-                     <div className="h-full bg-gray-400 rounded-full" style={{width: `${(c.volume/topCountries[0].volume)*100}%`}}></div>
+                     <div className="h-full bg-gray-400 rounded-full" style={{width: `${topCountries[0]?.volume ? (c.volume/topCountries[0].volume)*100 : 0}%`}}></div>
                   </div>
                </div>
              ))}
@@ -267,49 +278,46 @@ export default function Dashboard() {
 
          {/* Trade News */}
          <div className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm flex flex-col">
-           <div className="flex justify-between items-center mb-5">
-             <h3 className="text-base font-semibold">Trade News</h3>
-             <button onClick={() => fetchNews(searchQuery || 'trade OR supply chain')} disabled={newsLoading} className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1 cursor-pointer hover:text-gray-900 transition-colors">
-               {newsLoading ? 'LOADING...' : 'REFRESH'} <RefreshCw size={12} className={newsLoading ? 'animate-spin' : ''} />
-             </button>
-           </div>
-           
-           <div className="flex items-center gap-2 mb-4">
-             <input
-               type="text"
-               value={searchQuery}
-               onChange={(e) => setSearchQuery(e.target.value)}
-               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-               placeholder="Search news..."
-               className="flex-1 border border-gray-200 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:border-gray-400 focus:ring-1 focus:ring-gray-400"
-             />
-             <button
-               onClick={handleSearch}
-               className="bg-gray-900 text-white px-3 py-1.5 rounded-md text-sm font-medium hover:bg-gray-800 transition-colors"
-             >
-               Search
-             </button>
-           </div>
+            <div className="flex justify-between items-center mb-5">
+              <h3 className="text-base font-semibold">Trade News</h3>
+              <button onClick={() => fetchNews(searchQuery || 'trade OR supply chain')} disabled={newsLoading} className="text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1 cursor-pointer hover:text-gray-900 transition-colors">
+                {newsLoading ? 'LOADING...' : 'REFRESH'} <RefreshCw size={12} className={newsLoading ? 'animate-spin' : ''} />
+              </button>
+            </div>
+            
+            <div className="flex items-center gap-2 mb-4">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                placeholder="Search..."
+                className="flex-1 border border-gray-200 rounded-md px-3 py-1 text-sm focus:outline-none focus:border-gray-400"
+              />
+              <button onClick={handleSearch} className="bg-gray-900 text-white px-3 py-1 rounded-md text-sm font-medium">
+                Search
+              </button>
+            </div>
 
-           <div className="space-y-5">
-             {newsLoading && news.length === 0 ? (
-                <div className="text-sm text-gray-400">Fetching latest news...</div>
-             ) : news.length === 0 ? (
-                <div className="text-sm text-gray-400">No recent news found.</div>
-             ) : news.slice(0, 3).map((item, i) => (
-               <div key={i} className="flex gap-4 text-sm">
-                  <div className="mt-1 text-gray-400 shrink-0"><FileText size={16} /></div>
-                  <div className="flex-1 leading-tight min-w-0">
-                    <a href={item.link} target="_blank" rel="noreferrer" className="font-medium text-gray-900 truncate block hover:underline">
-                      {item.title}
-                    </a>
-                    <div className="text-xs text-gray-500 mt-1 line-clamp-2">
-                      {item.description || item.content || 'No description available for this article.'}
-                    </div>
-                  </div>
-               </div>
-             ))}
-           </div>
+            <div className="space-y-5">
+              {newsLoading ? (
+                 <div className="text-sm text-gray-400 animate-pulse">Fetching latest news...</div>
+              ) : (!Array.isArray(news) || news.length === 0) ? (
+                 <div className="text-sm text-gray-400 italic">No recent news found.</div>
+              ) : news.slice(0, 3).map((item, i) => (
+                <div key={i} className="flex gap-4 text-sm">
+                   <div className="mt-1 text-gray-400 shrink-0"><FileText size={16} /></div>
+                   <div className="flex-1 leading-tight min-w-0">
+                     <a href={item.link} target="_blank" rel="noreferrer" className="font-medium text-gray-900 truncate block hover:underline">
+                       {item.title}
+                     </a>
+                     <div className="text-xs text-gray-500 mt-1 line-clamp-2">
+                       {item.description || item.content || 'No description available for this article.'}
+                     </div>
+                   </div>
+                </div>
+              ))}
+            </div>
          </div>
 
       </div>
