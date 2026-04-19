@@ -73,9 +73,20 @@ async function start() {
   // Try Neo4j connection (optional)
   await initDriver();
 
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     console.log(`\n  ✓ Server running on http://localhost:${PORT}`);
     console.log(`  ✓ API available at http://localhost:${PORT}/api\n`);
+  });
+
+  server.on('error', (err) => {
+    if (err && err.code === 'EADDRINUSE') {
+      console.error(`\n  ✗ Port ${PORT} is already in use. Another FlowScope server is running.`);
+      console.error(`  ✓ Reuse the existing server at http://localhost:${PORT} or stop the old process and restart.\n`);
+      process.exit(0);
+    }
+
+    console.error('[Server] Listen error:', err.message || err);
+    process.exit(1);
   });
 }
 

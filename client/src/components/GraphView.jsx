@@ -25,19 +25,32 @@ function fmt(n) {
   return n.toString();
 }
 
-export default function GraphView({ graphData, onNodeClick, onExpandNode, expandingNode, selectedNode, highlightCompany }) {
+export default function GraphView({ graphData, onNodeClick, onExpandNode, expandingNode, selectedNode, highlightCompany, showControls = true }) {
   const containerRef = useRef(null);
   const cyRef        = useRef(null);
   const [tooltip,    setTooltip] = useState(null);
   const [expandHint, setExpandHint] = useState(null); // show "double-click to expand" hint
+  const lastTapRef = useRef({ id: null, at: 0 });
+  const lastExpandRef = useRef({ id: null, at: 0 });
 
   // Keep callback refs up to date
   const onExpandRef = useRef(onExpandNode);
   useEffect(() => { onExpandRef.current = onExpandNode; }, [onExpandNode]);
 
+  const getActiveCy = useCallback(() => {
+    const cy = cyRef.current;
+    return cy && !cy.destroyed() ? cy : null;
+  }, []);
+
   const build = useCallback(() => {
     if (!containerRef.current || !graphData?.nodes?.length) return;
-    if (cyRef.current) cyRef.current.destroy();
+    const existing = cyRef.current;
+    if (existing && !existing.destroyed()) {
+      existing.stop();
+      existing.removeAllListeners();
+      cyRef.current = null;
+      existing.destroy();
+    }
 
     const qs   = graphData.edges.map(e => e.quantity || e.tradeValue || 1);
     const minQ = Math.min(...qs) || 1;
@@ -75,6 +88,13 @@ export default function GraphView({ graphData, onNodeClick, onExpandNode, expand
     const cy = cytoscape({
       container: containerRef.current,
       elements,
+      autoungrabify: false,
+      autolock: false,
+      panningEnabled: true,
+      userPanningEnabled: true,
+      zoomingEnabled: true,
+      userZoomingEnabled: true,
+      boxSelectionEnabled: false,
       style: [
         {
           selector: 'node',
@@ -155,32 +175,57 @@ export default function GraphView({ graphData, onNodeClick, onExpandNode, expand
         { selector: 'edge.dimmed',    style: { 'line-opacity': .02 } },
       ],
       layout: {
-        name: 'cose', animate: true, animationDuration: 800, animationEasing: 'cubic-bezier(0.16, 1, 0.3, 1)',
+        name: 'cose', animate: false,
         nodeRepulsion: () => 12000, idealEdgeLength: () => 150,
         edgeElasticity: () => 100, gravity: 0.15, numIter: 1000, padding: 60,
         nodeDimensionsIncludeLabels: true,
       },
-      minZoom: .15, maxZoom: 4, wheelSensitivity: .2,
+      minZoom: .15, maxZoom: 4,
     });
+
+    // Ensure nodes can be moved by drag in both max and mini graph views.
+    cy.nodes().grabify();
+    cy.nodes().forEach((n) => n.grabbable(true));
+    cy.elements().unlock();
+    cy.autolock(false);
 
     // ─── Single click: select node ───
     cy.on('tap', 'node', evt => {
       const n = evt.target;
-      onNodeClick?.({ name: n.data('id'), country: n.data('country'), tier: n.data('tier'), tradeVolume: n.data('tradeVolume') });
+      const nodeId = n.data('id');
+      const now = Date.now();
+
+      onNodeClick?.({ id: nodeId, name: nodeId, country: n.data('country'), tier: n.data('tier'), tradeVolume: n.data('tradeVolume') });
+
+      // Reliable desktop double-click detection (works even when dbltap is inconsistent).
+      const isDoubleTap = lastTapRef.current.id === nodeId && (now - lastTapRef.current.at) < 380;
+      const expandCooldown = lastExpandRef.current.id === nodeId && (now - lastExpandRef.current.at) < 500;
+
+      if (isDoubleTap && !expandCooldown && onExpandRef.current) {
+        onExpandRef.current({ id: nodeId, name: nodeId, country: n.data('country'), tier: n.data('tier') });
+        lastExpandRef.current = { id: nodeId, at: now };
+      }
+
+      lastTapRef.current = { id: nodeId, at: now };
     });
 
     // ─── Double click: expand node (recursive trace) ───
     cy.on('dbltap', 'node', evt => {
       const n = evt.target;
-      const nodeData = { name: n.data('id'), country: n.data('country'), tier: n.data('tier') };
-      if (onExpandRef.current) {
+      const nodeId = n.data('id');
+      const now = Date.now();
+      const expandCooldown = lastExpandRef.current.id === nodeId && (now - lastExpandRef.current.at) < 500;
+      const nodeData = { id: nodeId, name: nodeId, country: n.data('country'), tier: n.data('tier') };
+      if (onExpandRef.current && !expandCooldown) {
         onExpandRef.current(nodeData);
+        lastExpandRef.current = { id: nodeId, at: now };
       }
     });
 
     cy.on('mouseover', 'node', evt => {
+      if (cy.destroyed()) return;
       evt.target.addClass('hover');
-      containerRef.current.style.cursor = 'pointer';
+      if (containerRef.current) containerRef.current.style.cursor = 'pointer';
       const hood = evt.target.closedNeighborhood();
       cy.elements().not(hood).addClass('dimmed');
       evt.target.connectedEdges().addClass('connected');
@@ -190,20 +235,23 @@ export default function GraphView({ graphData, onNodeClick, onExpandNode, expand
       setExpandHint({ x: rp.x, y: rp.y - 40, name: evt.target.data('id') });
     });
     cy.on('mouseout', 'node', evt => {
+      if (cy.destroyed()) return;
       evt.target.removeClass('hover');
-      containerRef.current.style.cursor = 'default';
+      if (containerRef.current) containerRef.current.style.cursor = 'default';
       cy.elements().removeClass('connected dimmed');
       setExpandHint(null);
     });
     cy.on('mouseover', 'edge', evt => {
+      if (cy.destroyed()) return;
       const e = evt.target; e.addClass('hover');
-      containerRef.current.style.cursor = 'pointer';
+      if (containerRef.current) containerRef.current.style.cursor = 'pointer';
       const p = evt.renderedPosition;
       setTooltip({ x: p.x, y: p.y, hsn: e.data('hsn'), quantity: e.data('quantity'), product: e.data('product'), source: e.data('source'), target: e.data('target') });
     });
     cy.on('mouseout', 'edge', evt => {
+      if (cy.destroyed()) return;
       evt.target.removeClass('hover');
-      containerRef.current.style.cursor = 'default';
+      if (containerRef.current) containerRef.current.style.cursor = 'default';
       setTooltip(null);
     });
     cy.on('tap', evt => {
@@ -215,36 +263,46 @@ export default function GraphView({ graphData, onNodeClick, onExpandNode, expand
 
   useEffect(() => {
     build();
-    return () => { cyRef.current?.destroy(); cyRef.current = null; };
+    return () => {
+      const cy = cyRef.current;
+      if (cy && !cy.destroyed()) {
+        cy.stop();
+        cy.removeAllListeners();
+        cy.destroy();
+      }
+      cyRef.current = null;
+    };
   }, [build]);
 
   // Handle selected node highlight
   useEffect(() => {
-    if (!cyRef.current) return;
-    cyRef.current.elements().removeClass('selected-node');
+    const cy = getActiveCy();
+    if (!cy) return;
+    cy.elements().removeClass('selected-node');
     if (selectedNode) {
-      const el = cyRef.current.getElementById(selectedNode);
+      const el = cy.getElementById(selectedNode);
       if (el.length) el.addClass('selected-node');
     }
-  }, [selectedNode]);
+  }, [selectedNode, getActiveCy]);
 
   // Handle expanding node visual indicator
   useEffect(() => {
-    if (!cyRef.current) return;
-    cyRef.current.elements().removeClass('expanding');
+    const cy = getActiveCy();
+    if (!cy) return;
+    cy.elements().removeClass('expanding');
     if (expandingNode) {
-      const el = cyRef.current.getElementById(expandingNode);
+      const el = cy.getElementById(expandingNode);
       if (el.length) el.addClass('expanding');
     }
-  }, [expandingNode]);
+  }, [expandingNode, getActiveCy]);
 
-  const fit     = () => cyRef.current?.animate({ fit: { padding: 50 }, duration: 400, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' });
-  const zoomIn  = () => { const cy = cyRef.current; if (cy) cy.animate({ zoom: { level: cy.zoom()*1.4, renderedPosition:{x:cy.width()/2,y:cy.height()/2} }, duration:250 }); };
-  const zoomOut = () => { const cy = cyRef.current; if (cy) cy.animate({ zoom: { level: cy.zoom()/1.4, renderedPosition:{x:cy.width()/2,y:cy.height()/2} }, duration:250 }); };
+  const fit     = () => getActiveCy()?.animate({ fit: { padding: 50 }, duration: 400, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' });
+  const zoomIn  = () => { const cy = getActiveCy(); if (cy) cy.animate({ zoom: { level: cy.zoom()*1.4, renderedPosition:{x:cy.width()/2,y:cy.height()/2} }, duration:250 }); };
+  const zoomOut = () => { const cy = getActiveCy(); if (cy) cy.animate({ zoom: { level: cy.zoom()/1.4, renderedPosition:{x:cy.width()/2,y:cy.height()/2} }, duration:250 }); };
 
   return (
     <div className="relative h-full overflow-hidden" id="graph-view">
-      <div ref={containerRef} className="w-full h-full bg-[#F8FAFC]" />
+      <div ref={containerRef} className="w-full h-full bg-[#F8FAFC] cursor-grab active:cursor-grabbing touch-none" />
 
       {/* Expand Hint on Hover */}
       {expandHint && !expandingNode && (
@@ -283,6 +341,7 @@ export default function GraphView({ graphData, onNodeClick, onExpandNode, expand
       )}
 
       {/* Control Surface — bottom right */}
+      {showControls && (
       <div className="absolute bottom-6 right-6 flex flex-col gap-2 z-10">
         {[
           { icon: <Plus size={16} strokeWidth={2.5} />,    fn: zoomIn,  title: 'Zoom in'   },
@@ -297,6 +356,7 @@ export default function GraphView({ graphData, onNodeClick, onExpandNode, expand
           </button>
         ))}
       </div>
+      )}
       
       {/* Network Origin Tag */}
       {highlightCompany && (

@@ -64,6 +64,18 @@ export default function App() {
     } catch (e) {} finally { setExpandingNode(null); }
   }, [hsn]);
 
+  const handleNodeClickMain = useCallback((node) => {
+    setSelNode(node);
+  }, []);
+
+  const handleNodeClickMiniGraph = useCallback((node) => {
+    setSelNode(node);
+  }, []);
+
+  const handleExpandNodeMiniGraph = useCallback((node) => {
+    expandNode(node);
+  }, [expandNode]);
+
   return (
     <div className="relative h-screen w-screen bg-white text-black font-sans overflow-hidden flex">
       
@@ -114,7 +126,7 @@ export default function App() {
               viewMode === 'map' ? (
                 <MapView tradeRoutes={graphData?.tradeRoutes} nodes={graphData?.nodes} />
               ) : (
-                <GraphView graphData={graphData} highlightCompany={company?.name} selectedNode={selNode?.id} onNodeClick={setSelNode} onExpandNode={expandNode} expandingNode={expandingNode} />
+                <GraphView graphData={graphData} highlightCompany={company?.name} selectedNode={selNode?.id} onNodeClick={handleNodeClickMain} onExpandNode={expandNode} expandingNode={expandingNode} showControls={false} />
               )
             ) : (
               /* Idle state before BOM filter click */
@@ -234,14 +246,36 @@ export default function App() {
 
               {/* Mini-Map Swapper (Only shows after implementation) */}
               {graphData && (
-                <div className="absolute bottom-6 right-6 w-[380px] h-[280px] rounded-[32px] overflow-hidden border border-gray-200 shadow-2xl pointer-events-auto bg-white group transition-transform hover:scale-[1.02]">
+                <div
+                  className="absolute bottom-6 right-6 w-[380px] h-[280px] rounded-[32px] overflow-hidden border border-gray-200 shadow-2xl pointer-events-auto bg-white group transition-transform hover:scale-[1.02]"
+                >
                     <div className="absolute top-4 left-4 z-20">
-                       <button onClick={() => setViewMode(viewMode === 'map' ? 'graph' : 'map')} className="px-4 py-2 bg-black hover:bg-gray-800 text-white font-black text-[10px] uppercase rounded-xl transition-all shadow-xl">
-                         Swap View
+                       <button
+                         onClick={(e) => {
+                           e.stopPropagation();
+                           setViewMode(viewMode === 'map' ? 'graph' : 'map');
+                         }}
+                         className="w-14 h-14 bg-black hover:bg-gray-800 text-white rounded-2xl transition-all shadow-xl flex items-center justify-center"
+                         title={viewMode === 'map' ? 'Expand graph view' : 'Expand map view'}
+                         aria-label={viewMode === 'map' ? 'Expand graph view' : 'Expand map view'}
+                       >
+                         {viewMode === 'map' ? <ArrowUpRight size={28} strokeWidth={2.5} /> : <ArrowDownLeft size={28} strokeWidth={2.5} />}
                        </button>
                     </div>
                     <div className="w-full h-full">
-                      {viewMode === 'map' ? <GraphView graphData={graphData} selectedNode={selNode?.id} onNodeClick={setSelNode} /> : <MapView tradeRoutes={graphData?.tradeRoutes} nodes={graphData?.nodes} />}
+                      {viewMode === 'map' ? (
+                        <GraphView
+                          graphData={graphData}
+                          highlightCompany={company?.name}
+                          selectedNode={selNode?.id}
+                          onNodeClick={handleNodeClickMiniGraph}
+                          onExpandNode={handleExpandNodeMiniGraph}
+                          expandingNode={expandingNode}
+                          showControls={false}
+                        />
+                      ) : (
+                        <MapView tradeRoutes={graphData?.tradeRoutes} nodes={graphData?.nodes} />
+                      )}
                     </div>
                 </div>
               )}

@@ -10,6 +10,7 @@ class BomService {
     // Track if daily quota is exhausted — skip Gemini entirely
     this.quotaExhausted = false;
     this.quotaResetTime = 0;
+    this.strictMode = String(process.env.BOM_STRICT_MODE || 'true').toLowerCase() === 'true';
   }
 
   /**
@@ -26,13 +27,20 @@ class BomService {
       return this.cache.get(cacheKey);
     }
 
-    // If daily quota exhausted, go straight to fallback
+    // If daily quota exhausted, fail fast in strict mode
     if (this.quotaExhausted && Date.now() < this.quotaResetTime) {
-      console.log(`[BOM] Daily quota exhausted. Using fallback for HS ${cacheKey}`);
+      const message = `[BOM] Daily Gemini quota exhausted for HS ${cacheKey}.`;
+      if (this.strictMode) {
+        throw new Error(`${message} Provide a valid API key/quota to continue authentic BOM traversal.`);
+      }
+      console.log(`${message} Using fallback.`);
       return this._fallbackBom(cacheKey);
     }
 
     if (!process.env.GEMINI_API_KEY) {
+       if (this.strictMode) {
+         throw new Error('[BOM] GEMINI_API_KEY not set. Strict mode blocks fallback BOM generation.');
+       }
        console.warn('[BOM] GEMINI_API_KEY not set. Using fallback.');
        return this._fallbackBom(cacheKey);
     }
@@ -80,14 +88,18 @@ class BomService {
         // Check if it's a DAILY quota (limit: 0) vs per-minute
         const isDaily = error.message && error.message.includes('limit: 0');
         if (isDaily) {
-          console.warn(`[BOM] DAILY quota exhausted. Switching to fallback-only mode for 10 min.`);
+          console.warn(`[BOM] DAILY quota exhausted.`);
           this.quotaExhausted = true;
           this.quotaResetTime = Date.now() + 10 * 60 * 1000; // 10 minutes
         } else {
-          console.warn(`[BOM] Per-minute rate limit. Using fallback for HS ${cacheKey}.`);
+          console.warn(`[BOM] Per-minute rate limit for HS ${cacheKey}.`);
         }
       } else {
         console.error(`[BOM] Gemini failed:`, error.message || error);
+      }
+
+      if (this.strictMode) {
+        throw new Error(`[BOM] Gemini request failed for HS ${cacheKey}: ${error.message || 'unknown error'}`);
       }
     }
 

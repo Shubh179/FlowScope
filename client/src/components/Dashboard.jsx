@@ -148,7 +148,7 @@ export default function Dashboard() {
           </div>
 
           <div className="flex-1">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={280} minHeight={180}>
               <BarChart data={historyData} layout="vertical" margin={{ top: 10, right: 30, left: 10, bottom: 0 }} barSize={16}>
                 <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#E5E7EB" />
                 <XAxis type="number" domain={[0, 6000000]} axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#6B7280' }} tickFormatter={(v) => v === 0 ? '0M' : `${v / 1000000}M`} />
@@ -176,9 +176,9 @@ export default function Dashboard() {
           <div className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm flex-1 flex flex-col min-h-0">
             <h3 className="text-sm font-semibold mb-4">Services Trade Trend</h3>
             <div className="flex-1 min-h-0">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={historyData} margin={{ top: 5, right: 0, left: -30, bottom: 0 }}>
-                  <XAxis dataKey="year" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#9CA3AF' }} padding={{ left: 10, right: 10 }} />
+              <ResponsiveContainer width="100%" height="100%" minWidth={220} minHeight={120}>
+                <AreaChart data={historyData} margin={{top:5, right:0, left:-30, bottom:0}}>
+                  <XAxis dataKey="year" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#9CA3AF'}} padding={{left: 10, right: 10}} />
                   <YAxis axisLine={false} tickLine={false} tick={false} />
                   <Area type="monotone" dataKey="exportServices" stackId="1" stroke="#374151" fill="#374151" />
                   <Area type="monotone" dataKey="importServices" stackId="1" stroke="#9CA3AF" fill="#9CA3AF" />
@@ -195,25 +195,25 @@ export default function Dashboard() {
               <span className="font-bold flex items-center gap-1.5"><span className="text-gray-400 text-xs">⊘</span> 1.26</span>
             </div>
             <div className="flex-1 flex items-center justify-between pl-2 min-h-0">
-              <div className="flex flex-col gap-5 text-xs text-gray-500 font-medium">
-                <div className="flex items-center gap-3"><div className="w-4 h-1.5 bg-gray-400 rounded-full"></div> Growth</div>
-                <div className="flex items-center gap-3"><div className="w-4 h-1.5 bg-gray-300 rounded-full"></div> Volume</div>
-                <div className="flex items-center gap-3"><div className="w-4 h-1.5 bg-gray-200 rounded-full"></div> Balance</div>
-              </div>
-              <div className="w-28 h-28 relative mr-4 shrink-0">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={[{ v: 1.26 }, { v: 0.4 }]} innerRadius={36} outerRadius={52} dataKey="v" stroke="none" startAngle={90} endAngle={-270}>
-                      <Cell fill="#374151" />
-                      <Cell fill="#E5E7EB" />
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="absolute inset-0 flex flex-col items-center justify-center pt-1">
-                  <div className="text-2xl font-bold leading-none text-gray-900">1.26</div>
-                  <div className="text-[7px] text-gray-500 font-medium mt-1.5 uppercase text-center leading-tight">Ratio</div>
-                </div>
-              </div>
+               <div className="flex flex-col gap-5 text-xs text-gray-500 font-medium">
+                  <div className="flex items-center gap-3"><div className="w-4 h-1.5 bg-gray-400 rounded-full"></div> Growth</div>
+                  <div className="flex items-center gap-3"><div className="w-4 h-1.5 bg-gray-300 rounded-full"></div> Volume</div>
+                  <div className="flex items-center gap-3"><div className="w-4 h-1.5 bg-gray-200 rounded-full"></div> Balance</div>
+               </div>
+               <div className="w-28 h-28 relative mr-4 shrink-0">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={80} minHeight={80}>
+                    <PieChart>
+                      <Pie data={[{v:1.26}, {v:0.4}]} innerRadius={36} outerRadius={52} dataKey="v" stroke="none" startAngle={90} endAngle={-270}>
+                        <Cell fill="#374151" />
+                        <Cell fill="#E5E7EB" />
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center pt-1">
+                    <div className="text-2xl font-bold leading-none text-gray-900">1.26</div>
+                    <div className="text-[7px] text-gray-500 font-medium mt-1.5 uppercase text-center leading-tight">Ratio</div>
+                  </div>
+               </div>
             </div>
           </div>
         </div>

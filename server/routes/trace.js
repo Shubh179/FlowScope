@@ -13,8 +13,22 @@ const COUNTRY_COORDS = {
 
 router.post('/expand', async (req, res) => {
   try {
-    const { companyName, companyCountry, targetHsCode, maxTiers = 2 } = req.body;
+    const {
+      companyName,
+      companyCountry,
+      targetHsCode,
+      maxTiers = 2,
+      traceMode = 'hybrid',
+      strictGemini = false,
+    } = req.body;
     if (!companyName || !targetHsCode) return res.status(400).json({ error: 'Missing parameters' });
+
+    const normalizedMode = String(traceMode || 'hybrid').toLowerCase();
+    const allowGemini = normalizedMode !== 'comtrade-only';
+
+    let geminiAttemptCount = 0;
+    let geminiSuccessCount = 0;
+    let geminiFailureCount = 0;
 
     const queue = [{ name: companyName, country: companyCountry || 'Unknown', hs: targetHsCode, tier: 0 }];
     const allNodes = new Map();
@@ -34,61 +48,187 @@ router.post('/expand', async (req, res) => {
     allNodes.set(companyName, { 
       id: companyName, label: companyName, country: companyCountry || 'Unknown', tier: 0, 
       description: initialDesc,
-      coords: COUNTRY_COORDS[companyCountry] || [20, 77] 
+      coords: COUNTRY_COORDS[companyCountry] || [20, 77],
+      source: 'user-input',
+      confidence: 'anchor'
     });
 
     while (queue.length > 0 && allNodes.size < 40) {
       const current = queue.shift();
       if (current.tier >= maxTiers) continue;
 
-      // ─── STEP 1: Get Upstream BOM (Gemini) ───
-      let upHs = await bomService.getUpstreamHsCodes(current.hs, '');
-      if (upHs.length === 0) upHs = ['8708', '8507', '8409'];
-
-      // ─── STEP 2: Find Real Suppliers in Neo4j/CSV ───
-      for (const hsn of upHs.slice(0, 2)) {
-        if (!getIsConnected()) continue;
-        const session = getDriver().session();
+      // ─── STEP 1: Gemini proposes upstream HS inputs for the current node HS ───
+      let upstreamHsCodes = [];
+      let usedGemini = false;
+      let usedFallbackBom = false;
+      if (allowGemini) {
+        geminiAttemptCount += 1;
         try {
-          const result = await session.run(`
-            MATCH (s:Company)
-            WHERE (s.country <> $currentCountry AND s.country IS NOT NULL)
-            OR (s.name CONTAINS $hsn)
-            RETURN s.name AS name, s.country AS country, s.description AS desc
-            LIMIT 2
-          `, { currentCountry: current.country, hsn });
-
-          for (const record of result.records) {
-            const supName = record.get('name');
-            const supCountry = record.get('country') || 'Unknown';
-            const supDesc = csvService.getCompanyDescription(supName) || record.get('desc') || 'Verified supply chain tier partner.';
-
-            // 🔍 FIND REAL CONCURRENT IMPORTERS IN DB
-            let realImporters = [];
-            try {
-              const impResult = await session.run(`
-                MATCH (s:Company {name: $supName})-[r:SUPPLIES_TO]-(imp:Company)
-                WHERE r.hsn CONTAINS $hsn
-                RETURN DISTINCT imp.name AS name LIMIT 3
-              `, { supName, hsn: hsn.substring(0,2) });
-              realImporters = impResult.records.map(r => r.get('name'));
-            } catch (e) {}
-
-            if (visited.has(supName)) continue;
-            visited.add(supName);
-
-            const baseCoords = COUNTRY_COORDS[supCountry] || [Math.random()*40, Math.random()*100];
-            const jitterCoords = [baseCoords[0] + (Math.random()-0.5)*2, baseCoords[1] + (Math.random()-0.5)*2];
-
-            allNodes.set(supName, { id: supName, label: supName, country: supCountry, tier: current.tier + 1, coords: jitterCoords, description: supDesc });
-            allEdges.push({ 
-              source: supName, target: current.name, hsn, product: `HS ${hsn} Component`, 
-              type: current.tier === 0 ? 'IMPORT' : 'UPSTREAM_IMPORT',
-              importers: realImporters.length > 0 ? realImporters : ['Market Standard Aggregates']
-            });
-            queue.push({ name: supName, country: supCountry, hs: hsn, tier: current.tier + 1 });
+          upstreamHsCodes = await bomService.getUpstreamHsCodes(current.hs, current.description || '');
+          usedGemini = Array.isArray(upstreamHsCodes) && upstreamHsCodes.length > 0;
+          if (usedGemini) {
+            geminiSuccessCount += 1;
           }
-        } finally { await session.close(); }
+        } catch (err) {
+          geminiFailureCount += 1;
+          if (strictGemini) {
+            return res.status(502).json({
+              error: `Gemini upstream inference failed for HS ${current.hs}`,
+              detail: err.message,
+              mode: normalizedMode,
+            });
+          }
+          // In non-strict mode, use static BOM fallback chapters before collapsing to current HS.
+          if (typeof bomService._fallbackBom === 'function') {
+            try {
+              const chapter = String(current.hs).substring(0, 2);
+              const fallbackCodes = bomService._fallbackBom(chapter);
+              if (Array.isArray(fallbackCodes) && fallbackCodes.length > 0) {
+                upstreamHsCodes = fallbackCodes;
+                usedFallbackBom = true;
+              }
+            } catch (_fallbackErr) {
+              // Keep traversal alive with current HS if fallback lookup also fails.
+            }
+          }
+
+          // Keep traversal alive with current HS if Gemini is temporarily unavailable.
+          usedGemini = false;
+          console.warn(`[TRACE] Gemini unavailable for HS ${current.hs}: ${err.message}`);
+        }
+      }
+
+      const hsInputs = (Array.isArray(upstreamHsCodes) && upstreamHsCodes.length > 0
+        ? upstreamHsCodes
+        : [String(current.hs).substring(0, 2)]
+      )
+        .map((code) => String(code).replace('.', '').substring(0, 2))
+        .filter(Boolean)
+        .filter((code, idx, arr) => arr.indexOf(code) === idx)
+        .slice(0, 4);
+
+      // ─── STEP 2: For each upstream HS input, fetch Comtrade import partners ───
+      for (const hsInput of hsInputs) {
+        const partnerCountries = await comtradeService.getTopPartners(current.country, hsInput);
+        if (!Array.isArray(partnerCountries) || partnerCountries.length === 0) continue;
+
+        // ─── STEP 3: Resolve supplier entities in partner countries ───
+        for (const partner of partnerCountries.slice(0, 4)) {
+          const partnerCountry = partner.country;
+          const hsPrefix = hsInput;
+
+          if (getIsConnected()) {
+            const session = getDriver().session();
+            try {
+              const result = await session.run(`
+              MATCH (s:Company)
+              WHERE toLower(s.country) = toLower($partnerCountry)
+                AND s.name <> $currentName
+              OPTIONAL MATCH (s)-[r:SUPPLIES_TO]-(imp:Company)
+              WHERE r.hsn CONTAINS $hsPrefix
+              RETURN s.name AS name,
+                     s.country AS country,
+                     s.description AS desc,
+                     COLLECT(DISTINCT imp.name)[0..3] AS importers
+              LIMIT 2
+            `, {
+              partnerCountry,
+              currentName: current.name,
+              hsPrefix,
+            });
+
+              for (const record of result.records) {
+                const supName = record.get('name');
+                const supCountry = record.get('country') || partnerCountry || 'Unknown';
+                const supDesc = csvService.getCompanyDescription(supName) || record.get('desc') || 'Verified supply chain tier partner.';
+                const realImporters = (record.get('importers') || []).filter(Boolean);
+
+                if (visited.has(supName)) continue;
+                visited.add(supName);
+
+                const baseCoords = COUNTRY_COORDS[supCountry] || [Math.random()*40, Math.random()*100];
+                const jitterCoords = [baseCoords[0] + (Math.random()-0.5)*2, baseCoords[1] + (Math.random()-0.5)*2];
+
+                allNodes.set(supName, {
+                  id: supName,
+                  label: supName,
+                  country: supCountry,
+                  tier: current.tier + 1,
+                  coords: jitterCoords,
+                  description: supDesc,
+                  source: usedGemini ? 'gemini+comtrade' : 'comtrade-only',
+                  confidence: usedGemini ? 'high' : (usedFallbackBom ? 'medium' : 'low'),
+                });
+
+                allEdges.push({
+                  source: supName,
+                  target: current.name,
+                  hsn: hsPrefix,
+                  product: `HS ${hsPrefix} upstream input`,
+                  type: current.tier === 0 ? 'IMPORT' : 'UPSTREAM_IMPORT',
+                  importers: realImporters.length > 0 ? realImporters : [current.name],
+                  partnerCountry,
+                  tradeValue: partner.tradeValue || 0,
+                  provenance: usedGemini ? 'gemini+comtrade' : (usedFallbackBom ? 'fallback-bom+comtrade' : 'comtrade-only'),
+                  evidence: {
+                    mode: usedGemini ? 'gemini+comtrade' : (usedFallbackBom ? 'fallback-bom+comtrade' : 'comtrade-only'),
+                    upstreamHsInput: hsPrefix,
+                    partnerCountry,
+                    tradeValue: partner.tradeValue || 0,
+                  },
+                });
+
+                queue.push({ name: supName, country: supCountry, hs: hsPrefix, tier: current.tier + 1 });
+              }
+            } finally {
+              await session.close();
+            }
+          } else {
+            const csvCandidates = Array.from(csvService.companies.values())
+              .filter((c) => c.country && c.country.toLowerCase() === String(partnerCountry).toLowerCase() && c.name !== current.name)
+              .slice(0, 2);
+
+            for (const candidate of csvCandidates) {
+              if (visited.has(candidate.name)) continue;
+              visited.add(candidate.name);
+
+              const supCountry = candidate.country || partnerCountry || 'Unknown';
+              const baseCoords = COUNTRY_COORDS[supCountry] || [Math.random()*40, Math.random()*100];
+              const jitterCoords = [baseCoords[0] + (Math.random()-0.5)*2, baseCoords[1] + (Math.random()-0.5)*2];
+
+              allNodes.set(candidate.name, {
+                id: candidate.name,
+                label: candidate.name,
+                country: supCountry,
+                tier: current.tier + 1,
+                coords: jitterCoords,
+                description: csvService.getCompanyDescription(candidate.name) || 'CSV-derived supply chain partner.',
+                source: usedGemini ? 'gemini+comtrade' : 'comtrade-only',
+                confidence: usedGemini ? 'medium' : (usedFallbackBom ? 'medium' : 'low'),
+              });
+
+              allEdges.push({
+                source: candidate.name,
+                target: current.name,
+                hsn: hsPrefix,
+                product: `HS ${hsPrefix} upstream input`,
+                type: current.tier === 0 ? 'IMPORT' : 'UPSTREAM_IMPORT',
+                importers: [current.name],
+                partnerCountry,
+                tradeValue: partner.tradeValue || 0,
+                provenance: usedGemini ? 'gemini+comtrade' : (usedFallbackBom ? 'fallback-bom+comtrade' : 'comtrade-only'),
+                evidence: {
+                  mode: usedGemini ? 'gemini+comtrade' : (usedFallbackBom ? 'fallback-bom+comtrade' : 'comtrade-only'),
+                  upstreamHsInput: hsPrefix,
+                  partnerCountry,
+                  tradeValue: partner.tradeValue || 0,
+                },
+              });
+
+              queue.push({ name: candidate.name, country: supCountry, hs: hsPrefix, tier: current.tier + 1 });
+            }
+          }
+        }
       }
     }
 
@@ -97,7 +237,22 @@ router.post('/expand', async (req, res) => {
       return (s && t) ? { from: s.coords, to: t.coords, fromName: s.id, toName: t.id, hsn: e.hsn, type: e.type } : null;
     }).filter(r => r);
 
-    res.json({ nodes: Array.from(allNodes.values()), edges: allEdges, tradeRoutes });
+    res.json({
+      nodes: Array.from(allNodes.values()),
+      edges: allEdges,
+      tradeRoutes,
+      meta: {
+        totalNodes: allNodes.size,
+        totalEdges: allEdges.length,
+        mode: normalizedMode,
+        gemini: {
+          enabled: allowGemini,
+          attempts: geminiAttemptCount,
+          successes: geminiSuccessCount,
+          failures: geminiFailureCount,
+        },
+      },
+    });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
