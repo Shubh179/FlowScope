@@ -38,11 +38,15 @@ router.get('/search', async (req, res) => {
            LIMIT 12`,
           { query }
         );
-        companies = result.records.map((r) => ({
-          name: r.get('name'),
-          country: r.get('country') || 'Unknown',
-          description: r.get('description') || '',
-        }));
+        companies = result.records.map((r) => {
+          const name = r.get('name');
+          const dbDesc = r.get('description');
+          return {
+            name,
+            country: r.get('country') || 'Unknown',
+            description: csvService.getCompanyDescription(name) || dbDesc || '',
+          };
+        });
       } finally {
         await session.close();
       }

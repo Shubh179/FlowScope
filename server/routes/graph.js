@@ -39,11 +39,10 @@ router.get('/traverse', async (req, res) => {
  */
 router.get('/stats', (req, res) => {
   try {
-    const stats = csvService.getStats();
+    const stats = csvService.getStats() || { totalCompanies: 0, totalTradeLinks: 0 };
     res.json({ stats });
   } catch (err) {
-    console.error('Stats error:', err.message);
-    res.status(500).json({ error: 'Stats lookup failed' });
+    res.json({ stats: { totalCompanies: 0, totalTradeLinks: 0 } });
   }
 });
 
