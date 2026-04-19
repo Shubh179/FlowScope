@@ -2,21 +2,19 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import cytoscape from 'cytoscape';
 import { Plus, Minus, Maximize, ArrowUpRight, Activity, MousePointerClick } from 'lucide-react';
 
-const COUNTRY_COLORS = {
-  'India':'#3B82F6','United States':'#059669','China':'#EF4444','Japan':'#F59E0B',
-  'South Korea':'#8B5CF6','Germany':'#0EA5E9','Taiwan':'#EC4899','France':'#6366F1',
-  'United Kingdom':'#14B8A6','Switzerland':'#F97316','Singapore':'#84CC16',
-  'Finland':'#06B6D4','Sweden':'#A855F7','Brazil':'#22C55E','Australia':'#EAB308',
-  'Norway':'#64748B','Belgium':'#D946EF','Luxembourg':'#0284C7','Netherlands':'#E11D48',
-  'Denmark':'#DC2626','Italy':'#2DD4BF','Canada':'#7C3AED','Malaysia':'#65A30D',
-  'Congo':'#92400E','Peru':'#B45309','Ivory Coast':'#854D0E','Saudi Arabia':'#166534','Ireland':'#15803D',
-  'Russia':'#EF4444','Mexico':'#22C55E','United Arab Emirates':'#F59E0B',
+const TIER_COLORS = {
+  0: '#2563EB', // Blue 600
+  1: '#8B5CF6', // Violet 500
+  2: '#10B981', // Emerald 500
+  3: '#F59E0B', // Amber 500
+  4: '#EC4899', // Pink 500
 };
-const DEFAULT_COLOR = '#94A3B8';
+
+const DEFAULT_COLOR = '#94A3B8'; // Slate 400
 
 // ─── Tier-based node sizing ───
-const TIER_SIZE = { 0: 56, 1: 42, 2: 34, 3: 28 };
-const TIER_FONT = { 0: '12px', 1: '10px', 2: '9px', 3: '8px' };
+const TIER_SIZE = { 0: 64, 1: 48, 2: 38, 3: 30, 4: 24 };
+const TIER_FONT = { 0: '14px', 1: '11px', 2: '10px', 3: '9px', 4: '8px' };
 
 function fmt(n) {
   if (!n) return '0';
@@ -65,7 +63,7 @@ export default function GraphView({ graphData, onNodeClick, onExpandNode, expand
           country:     n.country,
           tier:        n.tier || 0,
           tradeVolume: n.tradeVolume,
-          color:       COUNTRY_COLORS[n.country] || DEFAULT_COLOR,
+          color:       TIER_COLORS[n.tier] || DEFAULT_COLOR,
           isRoot:      n.id === highlightCompany,
           nodeSize:    TIER_SIZE[n.tier] || 28,
           fontSize:    TIER_FONT[n.tier] || '8px',
@@ -80,7 +78,7 @@ export default function GraphView({ graphData, onNodeClick, onExpandNode, expand
           quantity:e.quantity || e.tradeValue,
           product: e.product,
           w:       wt(e.quantity || e.tradeValue || 1),
-          ec:      COUNTRY_COLORS[graphData.nodes.find(node => node.id === e.source)?.country] || DEFAULT_COLOR,
+          ec:      TIER_COLORS[graphData.nodes.find(node => node.id === e.source)?.tier] || DEFAULT_COLOR,
         },
       })),
     ];
@@ -95,28 +93,30 @@ export default function GraphView({ graphData, onNodeClick, onExpandNode, expand
       zoomingEnabled: true,
       userZoomingEnabled: true,
       boxSelectionEnabled: false,
+      pixelRatio: 'auto', // Force retina-ready canvas
+      wheelSensitivity: 0.2, // Smooth zooming
       style: [
         {
           selector: 'node',
           style: {
-            'background-color':   'data(color)',
-            'background-opacity': .7,
+            'background-color':   '#ffffff',
+            'background-opacity': 1,
             label:                'data(label)',
-            color:                '#475569',
+            color:                '#1E293B',
             'font-size':          'data(fontSize)',
             'font-family':        'Inter, sans-serif',
-            'font-weight':        700,
+            'font-weight':        800,
             'text-halign':        'center',
             'text-valign':        'bottom',
             'text-margin-y':      8,
-            'text-outline-color': '#F8FAFC',
-            'text-outline-width': 3,
+            'text-outline-color': '#ffffff',
+            'text-outline-width': 4,
             width:                'data(nodeSize)',
             height:               'data(nodeSize)',
-            'border-width':       2,
+            'border-width':       4,
             'border-color':       'data(color)',
-            'border-opacity':     .4,
-            'transition-property':'background-opacity, width, height, border-width, border-opacity, text-opacity',
+            'border-opacity':     1,
+            'transition-property':'background-color, width, height, border-width, border-color',
             'transition-duration':'250ms',
             'overlay-opacity':    0,
           },
@@ -124,25 +124,23 @@ export default function GraphView({ graphData, onNodeClick, onExpandNode, expand
         {
           selector: 'node[?isRoot]',
           style: {
-            width:  56, height: 56,
-            'font-size': '12px',
+            width:  64, height: 64,
+            'font-size': '14px',
             'font-weight': 900,
-            'background-opacity': .95,
-            'border-width':  4,
-            'border-color':  '#fff',
-            'border-opacity': 1,
-            'text-outline-width': 4,
-            'text-margin-y': 10,
+            'background-color': 'data(color)',
+            'border-color': '#ffffff',
+            'border-width': 5,
+            color: '#0F172A',
           },
         },
         { selector: 'node.hover',
-          style: { 'background-opacity': 1, width: 50, height: 50, 'border-opacity': 1, 'text-outline-width': 4 } },
+          style: { 'background-color': 'data(color)', 'border-color': '#ffffff', width: 56, height: 56 } },
         { selector: 'node.selected-node',
-          style: { 'background-opacity': 1, 'border-width': 4, 'border-color': '#2563EB', width: 50, height: 50, 'text-opacity': 1 } },
+          style: { 'background-color': 'data(color)', 'border-color': '#1E293B', 'border-width': 5, width: 60, height: 60 } },
         { selector: 'node.expanding',
-          style: { 'background-opacity': 1, 'border-width': 5, 'border-color': '#F59E0B', 'border-style': 'dashed', width: 54, height: 54 } },
+          style: { 'border-style': 'dashed', 'border-color': '#F59E0B', width: 60, height: 60 } },
         { selector: 'node.dimmed',
-          style: { 'background-opacity': .05, 'text-opacity': .1, 'border-opacity': 0.05 } },
+          style: { 'background-opacity': 0.2, 'text-opacity': 0.2, 'border-opacity': 0.2, 'shadow-opacity': 0 } },
         {
           selector: 'edge',
           style: {
@@ -189,37 +187,22 @@ export default function GraphView({ graphData, onNodeClick, onExpandNode, expand
     cy.elements().unlock();
     cy.autolock(false);
 
-    // ─── Single click: select node ───
+    // ─── Single click: select node AND expand (recursive trace) ───
     cy.on('tap', 'node', evt => {
       const n = evt.target;
       const nodeId = n.data('id');
       const now = Date.now();
+      const nodeData = { id: nodeId, name: nodeId, country: n.data('country'), tier: n.data('tier'), tradeVolume: n.data('tradeVolume') };
 
-      onNodeClick?.({ id: nodeId, name: nodeId, country: n.data('country'), tier: n.data('tier'), tradeVolume: n.data('tradeVolume') });
+      onNodeClick?.(nodeData);
 
-      // Reliable desktop double-click detection (works even when dbltap is inconsistent).
-      const isDoubleTap = lastTapRef.current.id === nodeId && (now - lastTapRef.current.at) < 380;
       const expandCooldown = lastExpandRef.current.id === nodeId && (now - lastExpandRef.current.at) < 500;
-
-      if (isDoubleTap && !expandCooldown && onExpandRef.current) {
-        onExpandRef.current({ id: nodeId, name: nodeId, country: n.data('country'), tier: n.data('tier') });
+      if (!expandCooldown && onExpandRef.current) {
+        onExpandRef.current(nodeData);
         lastExpandRef.current = { id: nodeId, at: now };
       }
 
       lastTapRef.current = { id: nodeId, at: now };
-    });
-
-    // ─── Double click: expand node (recursive trace) ───
-    cy.on('dbltap', 'node', evt => {
-      const n = evt.target;
-      const nodeId = n.data('id');
-      const now = Date.now();
-      const expandCooldown = lastExpandRef.current.id === nodeId && (now - lastExpandRef.current.at) < 500;
-      const nodeData = { id: nodeId, name: nodeId, country: n.data('country'), tier: n.data('tier') };
-      if (onExpandRef.current && !expandCooldown) {
-        onExpandRef.current(nodeData);
-        lastExpandRef.current = { id: nodeId, at: now };
-      }
     });
 
     cy.on('mouseover', 'node', evt => {
@@ -229,10 +212,8 @@ export default function GraphView({ graphData, onNodeClick, onExpandNode, expand
       const hood = evt.target.closedNeighborhood();
       cy.elements().not(hood).addClass('dimmed');
       evt.target.connectedEdges().addClass('connected');
-      
-      // Show expand hint
-      const rp = evt.renderedPosition;
-      setExpandHint({ x: rp.x, y: rp.y - 40, name: evt.target.data('id') });
+      // Tooltip is now handled separately by the DetailsPanel in App.jsx
+      // No need for a "double click" hint anymore since single tap expands.
     });
     cy.on('mouseout', 'node', evt => {
       if (cy.destroyed()) return;
@@ -304,18 +285,7 @@ export default function GraphView({ graphData, onNodeClick, onExpandNode, expand
     <div className="relative h-full overflow-hidden" id="graph-view">
       <div ref={containerRef} className="w-full h-full bg-[#F8FAFC] cursor-grab active:cursor-grabbing touch-none" />
 
-      {/* Expand Hint on Hover */}
-      {expandHint && !expandingNode && (
-        <div 
-          className="absolute z-30 pointer-events-none"
-          style={{ left: expandHint.x - 60, top: expandHint.y - 10 }}
-        >
-          <div className="bg-slate-800/90 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold flex items-center gap-1.5 whitespace-nowrap backdrop-blur-md">
-            <MousePointerClick size={12} />
-            Double-click to expand
-          </div>
-        </div>
-      )}
+
 
       {/* Enhanced Tooltip */}
       {tooltip && (

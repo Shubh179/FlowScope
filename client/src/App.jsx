@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
-import { LayoutDashboard, Cloud, Search as SearchIcon, ChevronLeft, ChevronRight, Info, Package, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { LayoutDashboard, Cloud, Search as SearchIcon, ChevronLeft, ChevronRight, Info, Package, ArrowRightLeft, X } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import SearchBar from './components/SearchBar';
 import HSNSelector from './components/HSNSelector';
@@ -160,7 +161,7 @@ export default function App() {
         </header>
 
         {/* content Layer */}
-        <div className="flex-1 relative overflow-hidden">
+        <div className={`flex-1 relative overflow-hidden ${page === 'dashboard' ? '' : 'pointer-events-none'}`}>
           {page === 'dashboard' ? (
              <div className="h-full overflow-y-auto bg-gray-50"><Dashboard stats={stats} onExplore={() => setPage('analytics')} onTrace={(c) => { setCompany(c); setPage('analytics'); setHsn(null); setGraphData(null); }} /></div>
           ) : (
@@ -246,43 +247,66 @@ export default function App() {
 
               {/* Mini-Map Swapper (Only shows after implementation) */}
               {graphData && (
-                <div
-                  className="absolute bottom-6 right-6 w-[380px] h-[280px] rounded-[32px] overflow-hidden border border-gray-200 shadow-2xl pointer-events-auto bg-white group transition-transform hover:scale-[1.02]"
-                >
-                    <div className="absolute top-4 left-4 z-20">
-                       <button
-                         onClick={(e) => {
-                           e.stopPropagation();
-                           setViewMode(viewMode === 'map' ? 'graph' : 'map');
-                         }}
-                         className="w-14 h-14 bg-black hover:bg-gray-800 text-white rounded-2xl transition-all shadow-xl flex items-center justify-center"
-                         title={viewMode === 'map' ? 'Expand graph view' : 'Expand map view'}
-                         aria-label={viewMode === 'map' ? 'Expand graph view' : 'Expand map view'}
-                       >
-                         {viewMode === 'map' ? <ArrowUpRight size={28} strokeWidth={2.5} /> : <ArrowDownLeft size={28} strokeWidth={2.5} />}
-                       </button>
-                    </div>
-                    <div className="w-full h-full">
-                      {viewMode === 'map' ? (
-                        <GraphView
-                          graphData={graphData}
-                          highlightCompany={company?.name}
-                          selectedNode={selNode?.id}
-                          onNodeClick={handleNodeClickMiniGraph}
-                          onExpandNode={handleExpandNodeMiniGraph}
-                          expandingNode={expandingNode}
-                          showControls={false}
-                        />
-                      ) : (
-                        <MapView tradeRoutes={graphData?.tradeRoutes} nodes={graphData?.nodes} />
-                      )}
+                <div className="absolute bottom-6 right-6 pointer-events-auto group">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setViewMode(viewMode === 'map' ? 'graph' : 'map');
+                      }}
+                      className="absolute -top-4 -right-4 w-10 h-10 bg-slate-900 border-2 border-white hover:bg-slate-800 text-white rounded-full transition-all shadow-xl flex items-center justify-center z-30 hover:scale-110"
+                      title={viewMode === 'map' ? 'Expand graph view' : 'Expand map view'}
+                    >
+                      <ArrowRightLeft size={16} strokeWidth={2.5} />
+                    </button>
+                    <div className="w-[380px] h-[280px] rounded-[32px] overflow-hidden border border-slate-200 shadow-2xl bg-white transition-transform group-hover:scale-[1.02]">
+                      <div className="w-full h-full">
+                        {viewMode === 'map' ? (
+                          <GraphView
+                            graphData={graphData}
+                            highlightCompany={company?.name}
+                            selectedNode={selNode?.id}
+                            onNodeClick={handleNodeClickMiniGraph}
+                            onExpandNode={handleExpandNodeMiniGraph}
+                            expandingNode={expandingNode}
+                            showControls={false}
+                          />
+                        ) : (
+                          <MapView tradeRoutes={graphData?.tradeRoutes} nodes={graphData?.nodes} />
+                        )}
+                      </div>
                     </div>
                 </div>
               )}
+
+              {/* Map/Graph Switcher etc ends here */}
             </div>
           )}
         </div>
       </main>
+
+      {/* DETAILS PANEL FOR SELECTED NODE (MODAL) */}
+      <AnimatePresence>
+        {selNode && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/30 backdrop-blur-sm pointer-events-auto">
+            <div className="absolute inset-0" onClick={() => setSelNode(null)} />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 10 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+              className="w-[440px] max-h-[85vh] bg-white border border-gray-200 rounded-3xl shadow-2xl relative overflow-hidden flex flex-col z-10"
+            >
+              <div className="absolute top-4 right-4 z-50">
+               <button onClick={() => setSelNode(null)} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center hover:bg-slate-200 text-slate-500 hover:text-slate-800 transition-colors">
+                  <X size={16} strokeWidth={3} />
+               </button>
+              </div>
+              <DetailsPanel selectedNode={selNode} graphData={graphData} />
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 }

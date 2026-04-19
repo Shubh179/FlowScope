@@ -67,24 +67,27 @@ class Neo4jService {
   /**
    * Traverse the supply chain graph from a company, optionally filtered by HSN.
    */
-  async traverseGraph(companyName, hsnCode, maxDepth = 5) {
+  async traverseGraph(companyName, hsnCode, maxDepth = 3) {
     if (!getIsConnected()) return null;
     const session = getDriver().session();
     try {
       let query;
-      const params = { name: companyName, maxDepth: parseInt(maxDepth) };
+      const depth = Math.min(parseInt(maxDepth) || 3, 3); // Cap at 3 to prevent explosion
+      const params = { name: companyName };
 
       if (hsnCode && hsnCode !== 'all') {
         query = `
-          MATCH path = (c:Company {name: $name})-[:SUPPLIES_TO*1..5]-(s)
-          WHERE ALL(r IN relationships(path) WHERE r.hsn = $hsn)
-          WITH path, nodes(path) AS ns, relationships(path) AS rs
-          UNWIND ns AS n
-          WITH COLLECT(DISTINCT n) AS allNodes, COLLECT(DISTINCT rs) AS allRels, path
+          MATCH path = (c:Company {name: $name})-[:SUPPLIES_TO*1..${depth}]-(s)
+          WHERE ALL(r IN relationships(path) WHERE r.hsn CONTAINS $hsn)
+          WITH nodes(path) AS ns, relationships(path) AS rs
+          LIMIT 50
+          UNWIND ns AS node
+          WITH COLLECT(DISTINCT node) AS allNodes, COLLECT(rs) AS allRelSets
           UNWIND allNodes AS node
           WITH COLLECT(DISTINCT {id: node.name, label: node.name, country: node.country, tradeVolume: node.totalVolume}) AS nodes,
-               path
-          UNWIND relationships(path) AS rel
+               allRelSets
+          UNWIND allRelSets AS rels
+          UNWIND rels AS rel
           WITH nodes,
                COLLECT(DISTINCT {
                  source: startNode(rel).name,
@@ -98,12 +101,16 @@ class Neo4jService {
         params.hsn = hsnCode;
       } else {
         query = `
-          MATCH path = (c:Company {name: $name})-[:SUPPLIES_TO*1..5]-(s)
-          WITH path
-          UNWIND nodes(path) AS node
+          MATCH path = (c:Company {name: $name})-[:SUPPLIES_TO*1..${depth}]-(s)
+          WITH nodes(path) AS ns, relationships(path) AS rs
+          LIMIT 50
+          UNWIND ns AS node
+          WITH COLLECT(DISTINCT node) AS allNodes, COLLECT(rs) AS allRelSets
+          UNWIND allNodes AS node
           WITH COLLECT(DISTINCT {id: node.name, label: node.name, country: node.country, tradeVolume: node.totalVolume}) AS nodes,
-               path
-          UNWIND relationships(path) AS rel
+               allRelSets
+          UNWIND allRelSets AS rels
+          UNWIND rels AS rel
           WITH nodes,
                COLLECT(DISTINCT {
                  source: startNode(rel).name,

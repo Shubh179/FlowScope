@@ -33,8 +33,9 @@ router.get('/search', async (req, res) => {
         const result = await session.run(
           `MATCH (c:Company)
            WHERE toLower(c.name) CONTAINS toLower($query)
+           WITH c, CASE WHEN toLower(c.name) STARTS WITH toLower($query) THEN 1 ELSE 0 END AS prefixMatch
            RETURN c.name AS name, c.country AS country, c.description AS description
-           ORDER BY c.name
+           ORDER BY prefixMatch DESC, c.name ASC
            LIMIT 12`,
           { query }
         );

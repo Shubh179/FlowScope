@@ -6,11 +6,20 @@ import 'leaflet/dist/leaflet.css';
 // Light Professional Tiles
 const TILE_LAYER = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
 
+const TIER_COLORS = {
+  0: '#2563EB',
+  1: '#8B5CF6',
+  2: '#10B981',
+  3: '#F59E0B',
+  4: '#EC4899',
+};
+const DEFAULT_COLOR = '#94A3B8';
+
 const createMarkerIcon = (color) => L.divIcon({
   className: 'custom-map-marker',
-  html: `<div style="background: ${color}; width: 10px; height: 10px; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 5px rgba(0,0,0,0.1);"></div>`,
-  iconSize: [10, 10],
-  iconAnchor: [5, 5],
+  html: `<div style="background: ${color}; width: 12px; height: 12px; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 8px ${color}80;"></div>`,
+  iconSize: [12, 12],
+  iconAnchor: [6, 6],
 });
 
 // Component to handle map centering and animation
@@ -84,9 +93,9 @@ export default function MapView({ tradeRoutes = [], nodes = [] }) {
                 position={[(route.from[0] + route.to[0])/2, (route.from[1] + route.to[1])/2]} 
                 icon={L.divIcon({
                   className: 'hsn-label-on-path',
-                  html: `<div style="background: ${color}; color: white; font-size: 9px; font-weight: 900; padding: 2px 6px; border-radius: 4px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); white-space: nowrap;">HS ${route.hsn}</div>`,
-                  iconSize: [40, 14],
-                  iconAnchor: [20, 7]
+                  html: `<div style="background: rgba(255,255,255,0.95); color: ${color}; font-size: 8px; font-family: Inter, sans-serif; font-weight: 900; padding: 2px 6px; border: 1.5px solid ${color}; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); white-space: nowrap; backdrop-filter: blur(4px); letter-spacing: -0.2px;">HS ${route.hsn}</div>`,
+                  iconSize: [36, 16],
+                  iconAnchor: [18, 8]
                 })}
                 interactive={false}
               />
@@ -95,9 +104,9 @@ export default function MapView({ tradeRoutes = [], nodes = [] }) {
                 position={route.to}
                 icon={L.divIcon({
                   className: 'flow-arrow',
-                  html: `<div style="color: ${color}; transform: rotate(${Math.atan2(route.to[0]-route.from[0], route.to[1]-route.from[1])}rad); font-size: 14px; font-weight: bold;">▶</div>`,
-                  iconSize: [20, 20],
-                  iconAnchor: [10, 10]
+                  html: `<div style="color: ${color}; transform: rotate(${Math.atan2(route.to[0]-route.from[0], route.to[1]-route.from[1])}rad); font-size: 14px; font-weight: 900; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2)); text-shadow: 0 0 2px #fff;">▶</div>`,
+                  iconSize: [16, 16],
+                  iconAnchor: [8, 8]
                 })}
                 interactive={false}
               />
@@ -110,7 +119,7 @@ export default function MapView({ tradeRoutes = [], nodes = [] }) {
           <Marker 
             key={`marker-${i}`}
             position={n.coords}
-            icon={createMarkerIcon(n.tier === 0 ? '#2563EB' : '#475569')}
+            icon={createMarkerIcon(TIER_COLORS[n.tier] || DEFAULT_COLOR)}
           >
             <Popup>
               <div className="p-2 min-w-[200px]">

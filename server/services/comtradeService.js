@@ -31,14 +31,28 @@ const NAME_TO_M49 = {
   'united kingdom':'826','united states':'842','usa':'842',
   'uruguay':'858','uzbekistan':'860','venezuela':'862',
   'vietnam':'704','zambia':'894','zimbabwe':'716',
+  // ─── Extended aliases from df_cleaned_data ───
+  "people's republic of china":'156',
+  'republic of china':'158',
+  'kingdom of the netherlands':'528',
+  'dutch republic':'528',
+  'timor-leste':'626',
+  'namibia':'516',
+  'isle of man':'833',
+  'jersey':'832',
+  'albania':'008',
 };
 
 // ─── M49 Code → Country Name (reverse map) ───
 const M49_TO_NAME = {};
 for (const [name, code] of Object.entries(NAME_TO_M49)) {
+  const prettyName = name.charAt(0).toUpperCase() + name.slice(1);
   // Only store first name for each code (avoid duplicates like 'korea' overwriting 'south korea')
+  // Store both padded and unpadded versions
+  const unpadded = String(parseInt(code, 10));
   if (!M49_TO_NAME[code] || name.length > M49_TO_NAME[code].length) {
-    M49_TO_NAME[code] = name.charAt(0).toUpperCase() + name.slice(1);
+    M49_TO_NAME[code] = prettyName;
+    M49_TO_NAME[unpadded] = prettyName;
   }
 }
 // Manual overrides for cleaner names
@@ -74,12 +88,18 @@ function getM49(countryName) {
 }
 
 function getCountryName(m49Code) {
-  return M49_TO_NAME[String(m49Code)] || `Country-${m49Code}`;
+  const code = String(m49Code);
+  // Try unpadded, then zero-padded to 3 digits
+  return M49_TO_NAME[code] 
+    || M49_TO_NAME[code.padStart(3, '0')] 
+    || `Country-${m49Code}`;
 }
 
 class ComtradeService {
   constructor() {
     this.cache = new Map(); // Cache: "reporterCode:cmdCode" -> partners[]
+    this.lastRequestTime = 0; // Track last request timestamp for rate limiting
+    this.minRequestInterval = 1500; // 1.5 seconds between requests
   }
 
   /**
@@ -106,6 +126,14 @@ class ComtradeService {
     }
 
     console.log(`[Comtrade] GET imports of HS ${cmdCode} into ${reporterCountry} (M49: ${reporterCode})`);
+
+    // Enforce minimum delay between requests to avoid 429
+    const now = Date.now();
+    const elapsed = now - this.lastRequestTime;
+    if (elapsed < this.minRequestInterval) {
+      await new Promise(r => setTimeout(r, this.minRequestInterval - elapsed));
+    }
+    this.lastRequestTime = Date.now();
 
     const performRequest = async (attempt) => {
       try {

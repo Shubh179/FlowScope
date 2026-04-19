@@ -139,14 +139,14 @@ export default function SearchBar({ onCompanySelect }) {
                 ${i === active ? 'bg-blue-50' : 'hover:bg-slate-50'}`}
             >
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-white border border-slate-100 flex items-center justify-center text-base shadow-sm group">
+                <div className="w-9 h-9 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center text-[15px] shadow-sm flex-shrink-0">
                   {FLAGS[c.country] || '🏢'}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className={`text-sm font-bold truncate ${i === active ? 'text-blue-700' : 'text-slate-700'}`}>
+                <div className="flex-1 min-w-0 text-left">
+                  <div className={`text-[15px] tracking-tight font-bold truncate capitalize ${i === active ? 'text-blue-700' : 'text-slate-800'}`}>
                     {c.name}
                   </div>
-                  <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">{c.country}</div>
+                  <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5 truncate">{c.country}</div>
                 </div>
               </div>
               {i === active && (

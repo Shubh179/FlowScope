@@ -23,7 +23,7 @@ function fmt(n) {
   return n.toLocaleString();
 }
 
-export default function DetailsPanel({ selectedCompany, selectedNode }) {
+export default function DetailsPanel({ selectedCompany, selectedNode, graphData }) {
   const [details, setDetails] = useState(null);
   const [loading, setLoading] = useState(false);
   const [tab, setTab]         = useState('overview');
@@ -76,13 +76,47 @@ export default function DetailsPanel({ selectedCompany, selectedNode }) {
   );
 
   if (!details) return null;
-  const maxVol = (details.totalImportVolume||0)+(details.totalExportVolume||0);
+
+  let liveImports = 0, liveExports = 0;
+  const liveSuppliersMap = new Map();
+  const liveCustomersMap = new Map();
+
+  if (graphData && graphData.edges) {
+    graphData.edges.forEach(e => {
+      const vol = e.quantity || e.tradeValue || 0;
+      if (e.target === name) {
+        liveImports += vol;
+        const sNode = graphData.nodes?.find(n => n.id === e.source);
+        liveSuppliersMap.set(e.source, { name: e.source, country: sNode?.country || 'Unknown' });
+      }
+      if (e.source === name) {
+        liveExports += vol;
+        const cNode = graphData.nodes?.find(n => n.id === e.target);
+        liveCustomersMap.set(e.target, { name: e.target, country: cNode?.country || 'Unknown' });
+      }
+    });
+  }
+
+  const allSuppliers = [...(details.suppliers || [])];
+  liveSuppliersMap.forEach((val, key) => {
+    if (!allSuppliers.some(s => s.name === key)) allSuppliers.push(val);
+  });
+
+  const allCustomers = [...(details.customers || [])];
+  liveCustomersMap.forEach((val, key) => {
+    if (!allCustomers.some(c => c.name === key)) allCustomers.push(val);
+  });
+
+  const totalSuppliers = allSuppliers.length || details.supplierCount || 0;
+  const totalCustomers = allCustomers.length || details.customerCount || 0;
+  const totalImportVol = Math.max(details.totalImportVolume || 0, liveImports);
+  const totalExportVol = Math.max(details.totalExportVolume || 0, liveExports);
 
   const stats = [
-    { label: 'Imports', value: fmt(details.totalImportVolume), icon: Truck, color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-100' },
-    { label: 'Exports', value: fmt(details.totalExportVolume), icon: TrendingUp, color: 'text-violet-600', bg: 'bg-violet-50', border: 'border-violet-100' },
-    { label: 'Suppliers', value: details.supplierCount||0, icon: Package, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100' },
-    { label: 'Clients', value: details.customerCount||0, icon: Users, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100' },
+    { label: 'Imports', value: totalImportVol > 0 ? fmt(totalImportVol) : '—', icon: Truck, color: 'text-slate-800', bg: 'bg-slate-50', border: 'border-slate-200' },
+    { label: 'Exports', value: totalExportVol > 0 ? fmt(totalExportVol) : '—', icon: TrendingUp, color: 'text-slate-800', bg: 'bg-white', border: 'border-slate-200' },
+    { label: 'Suppliers', value: totalSuppliers, icon: Package, color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-100' },
+    { label: 'Clients', value: totalCustomers, icon: Users, color: 'text-slate-500', bg: 'bg-white', border: 'border-slate-200' },
   ];
 
   return (
@@ -198,7 +232,7 @@ export default function DetailsPanel({ selectedCompany, selectedNode }) {
 
             {tab === 'suppliers' && (
               <div className="space-y-2">
-                {details.suppliers?.length > 0 ? details.suppliers.map((s, i) => (
+                {allSuppliers.length > 0 ? allSuppliers.map((s, i) => (
                   <motion.div 
                     key={s.name}
                     initial={{ opacity: 0, x: -10 }}
@@ -225,7 +259,7 @@ export default function DetailsPanel({ selectedCompany, selectedNode }) {
 
             {tab === 'customers' && (
               <div className="space-y-2">
-                {details.customers?.length > 0 ? details.customers.map((c, i) => (
+                {allCustomers.length > 0 ? allCustomers.map((c, i) => (
                   <motion.div 
                     key={c.name}
                     initial={{ opacity: 0, x: -10 }}

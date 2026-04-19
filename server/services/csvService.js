@@ -2,10 +2,30 @@ const fs = require('fs');
 const path = require('path');
 const csv = require('csv-parser');
 
+// ─── Normalize exotic country names to Comtrade-compatible names ───
+const COUNTRY_NORMALIZE = {
+  "people's republic of china": 'China',
+  "republic of china": 'Taiwan',
+  "kingdom of the netherlands": 'Netherlands',
+  "dutch republic": 'Netherlands',
+  "united kingdom of great britain and ireland": 'United Kingdom',
+  "austria–hungary": 'Austria',
+  "german reich": 'Germany',
+  "german democratic republic": 'Germany',
+  "czechoslovakia": 'Czech Republic',
+};
+
+function normalizeCountry(raw) {
+  if (!raw) return 'Unknown';
+  const lower = raw.trim().toLowerCase();
+  return COUNTRY_NORMALIZE[lower] || raw.trim();
+}
+
 class CSVGraphService {
   constructor() {
     this.companies = new Map();
-    this.descriptions = new Map(); // New map for wikidata descriptions
+    this.descriptions = new Map(); // company_name (lowercase) -> wikidata_description
+    this.hsTaxonomy = new Map();   // hscode -> { section, section_name, description, level }
     this.edges = [];
     this.loaded = false;
   }
@@ -13,16 +33,21 @@ class CSVGraphService {
   loadData() {
     return Promise.all([
       this._loadTradeData(),
-      this._loadDescriptions()
+      this._loadDescriptions(),
+      this._loadHSTaxonomy(),
     ]).then(() => {
       this.loaded = true;
-      console.log(`  ✓ CSV loaded: ${this.companies.size} companies, ${this.edges.length} trade links, ${this.descriptions.size} dossiers`);
+      console.log(`  ✓ CSV loaded: ${this.companies.size} companies, ${this.edges.length} trade links, ${this.descriptions.size} dossiers, ${this.hsTaxonomy.size} HS codes`);
     });
   }
 
   _loadTradeData() {
     return new Promise((resolve, reject) => {
       const csvPath = path.join(__dirname, '..', '..', 'data', 'supply_chain_data.csv');
+      if (!fs.existsSync(csvPath)) {
+        console.warn(`  ⚠ supply_chain_data.csv not found at ${csvPath}`);
+        return resolve();
+      }
       fs.createReadStream(csvPath)
         .pipe(csv())
         .on('data', (row) => {
@@ -30,9 +55,10 @@ class CSVGraphService {
           const supplier = row.supplier_name?.trim();
           const hsn = row.hsn_code?.trim();
           const product = row.product_description?.trim();
-          const importCountry = row.import_country?.trim();
-          const exportCountry = row.export_country?.trim();
+          const importCountry = normalizeCountry(row.import_country);
+          const exportCountry = normalizeCountry(row.export_country);
           const quantity = parseInt(row.quantity) || 0;
+          const date = row.trade_date?.trim() || '';
 
           if (buyer && supplier) {
             if (!this.companies.has(buyer)) this.companies.set(buyer, { name: buyer, country: importCountry, totalVolume: 0 });
@@ -41,7 +67,7 @@ class CSVGraphService {
             this.companies.get(buyer).totalVolume += quantity;
             this.companies.get(supplier).totalVolume += quantity;
 
-            this.edges.push({ buyer, supplier, hsn, product, importCountry, exportCountry, quantity });
+            this.edges.push({ buyer, supplier, hsn, product, importCountry, exportCountry, quantity, date });
           }
         })
         .on('end', resolve)
@@ -52,15 +78,19 @@ class CSVGraphService {
   _loadDescriptions() {
     return new Promise((resolve, reject) => {
       const csvPath = path.join(__dirname, '..', '..', 'data', 'df_cleaned_data (1).csv');
-      if (!fs.existsSync(csvPath)) return resolve();
+      if (!fs.existsSync(csvPath)) {
+        console.warn(`  ⚠ df_cleaned_data (1).csv not found at ${csvPath}`);
+        return resolve();
+      }
 
       fs.createReadStream(csvPath)
         .pipe(csv())
         .on('data', (row) => {
           const name = row.company_name?.trim();
           const desc = row.wikidata_description?.trim();
+          const country = normalizeCountry(row.country);
           if (name && desc) {
-            this.descriptions.set(name.toLowerCase(), desc);
+            this.descriptions.set(name.toLowerCase(), { description: desc, country });
           }
         })
         .on('end', resolve)
@@ -68,9 +98,88 @@ class CSVGraphService {
     });
   }
 
+  _loadHSTaxonomy() {
+    return new Promise((resolve, reject) => {
+      const csvPath = path.join(__dirname, '..', '..', 'data', 'merged_harmonized_sections.csv');
+      if (!fs.existsSync(csvPath)) {
+        console.warn(`  ⚠ merged_harmonized_sections.csv not found at ${csvPath}`);
+        return resolve();
+      }
+
+      fs.createReadStream(csvPath)
+        .pipe(csv())
+        .on('data', (row) => {
+          const hscode = row.hscode?.trim();
+          if (hscode) {
+            this.hsTaxonomy.set(hscode, {
+              section: row.section?.trim() || '',
+              section_name: row.section_name?.trim() || '',
+              description: row.description?.trim() || '',
+              level: parseInt(row.level) || 0,
+            });
+          }
+        })
+        .on('end', resolve)
+        .on('error', reject);
+    });
+  }
+
+  /**
+   * Get the HS code description from the taxonomy.
+   */
+  getHsDescription(hsCode) {
+    if (!hsCode) return null;
+    const code = String(hsCode).trim();
+    // Try exact match first, then try 2-digit chapter
+    const entry = this.hsTaxonomy.get(code) || this.hsTaxonomy.get(code.substring(0, 2));
+    return entry ? entry.description : null;
+  }
+
+  /**
+   * Get HS section info for a given HS code.
+   */
+  getHsSection(hsCode) {
+    if (!hsCode) return null;
+    const code = String(hsCode).trim();
+    const entry = this.hsTaxonomy.get(code) || this.hsTaxonomy.get(code.substring(0, 2));
+    return entry || null;
+  }
+
   getCompanyDescription(name) {
     if (!name) return null;
-    return this.descriptions.get(name.toLowerCase()) || null;
+    const entry = this.descriptions.get(name.toLowerCase());
+    return entry ? entry.description : null;
+  }
+
+  /**
+   * Get company's normalized country from the descriptions dataset.
+   */
+  getCompanyCountry(name) {
+    if (!name) return null;
+    const entry = this.descriptions.get(name.toLowerCase());
+    return entry ? entry.country : null;
+  }
+
+  /**
+   * Find companies by country whose description matches certain keywords.
+   * Used by the trace engine for probabilistic matching.
+   */
+  findCompaniesByCountryAndProfile(country, keywords = []) {
+    const normalized = normalizeCountry(country);
+    const results = [];
+    for (const [nameKey, entry] of this.descriptions.entries()) {
+      if (normalizeCountry(entry.country) === normalized) {
+        if (keywords.length === 0) {
+          results.push({ name: nameKey, country: entry.country, description: entry.description });
+        } else {
+          const desc = entry.description.toLowerCase();
+          if (keywords.some(kw => desc.includes(kw.toLowerCase()))) {
+            results.push({ name: nameKey, country: entry.country, description: entry.description });
+          }
+        }
+      }
+    }
+    return results;
   }
 
   searchCompanies(query) {
@@ -78,7 +187,12 @@ class CSVGraphService {
     const q = query.toLowerCase();
     return Array.from(this.companies.values())
       .filter((c) => c.name.toLowerCase().includes(q))
-      .sort((a, b) => b.totalVolume - a.totalVolume)
+      .sort((a, b) => {
+        const aStart = a.name.toLowerCase().startsWith(q) ? 1 : 0;
+        const bStart = b.name.toLowerCase().startsWith(q) ? 1 : 0;
+        if (aStart !== bStart) return bStart - aStart; // Prefix match wins
+        return b.totalVolume - a.totalVolume; // Fallback to volume ranking
+      })
       .slice(0, 12)
       .map((c) => ({ 
         name: c.name, 
@@ -112,6 +226,109 @@ class CSVGraphService {
       supplierCount: new Set(asCustomer.map(e => e.supplier)).size,
       customerCount: new Set(asSupplier.map(e => e.buyer)).size,
       hsnCodes: this.getHSNCodes(companyName),
+    };
+  }
+
+  /**
+   * Traverse the supply chain graph from a company, optionally filtered by HSN.
+   * Used as a CSV fallback when Neo4j is unavailable.
+   */
+  traverseGraph(companyName, hsnCode, maxDepth = 5) {
+    const nodeMap = new Map();
+    const edgeList = [];
+    const visited = new Set();
+    const queue = [{ name: companyName, depth: 0 }];
+
+    while (queue.length > 0) {
+      const { name, depth } = queue.shift();
+      if (visited.has(name) || depth > maxDepth) continue;
+      visited.add(name);
+
+      const company = this.companies.get(name);
+      if (company && !nodeMap.has(name)) {
+        nodeMap.set(name, {
+          id: name,
+          label: name,
+          country: company.country,
+          tradeVolume: company.totalVolume,
+        });
+      }
+
+      // Find connected edges
+      const connectedEdges = this.edges.filter(e => {
+        const matches = e.buyer === name || e.supplier === name;
+        if (!matches) return false;
+        if (hsnCode && hsnCode !== 'all') return e.hsn === hsnCode;
+        return true;
+      });
+
+      for (const edge of connectedEdges) {
+        const otherName = edge.buyer === name ? edge.supplier : edge.buyer;
+        const otherCompany = this.companies.get(otherName);
+
+        if (otherCompany && !nodeMap.has(otherName)) {
+          nodeMap.set(otherName, {
+            id: otherName,
+            label: otherName,
+            country: otherCompany.country,
+            tradeVolume: otherCompany.totalVolume,
+          });
+        }
+
+        const edgeKey = `${edge.supplier}→${edge.buyer}→${edge.hsn}`;
+        if (!edgeList.some(e => `${e.source}→${e.target}→${e.hsn}` === edgeKey)) {
+          edgeList.push({
+            source: edge.supplier,
+            target: edge.buyer,
+            hsn: edge.hsn,
+            quantity: edge.quantity,
+            product: edge.product,
+            date: edge.date,
+          });
+        }
+
+        if (!visited.has(otherName)) {
+          queue.push({ name: otherName, depth: depth + 1 });
+        }
+      }
+    }
+
+    // Build trade routes
+    const routeMap = new Map();
+    for (const e of edgeList) {
+      const sourceNode = nodeMap.get(e.source);
+      const targetNode = nodeMap.get(e.target);
+      if (sourceNode && targetNode && sourceNode.country !== targetNode.country) {
+        const key = `${sourceNode.country}→${targetNode.country}`;
+        if (!routeMap.has(key)) {
+          routeMap.set(key, { from: sourceNode.country, to: targetNode.country, volume: 0, products: [] });
+        }
+        routeMap.get(key).volume += e.quantity || 0;
+      }
+    }
+
+    return {
+      nodes: Array.from(nodeMap.values()),
+      edges: edgeList,
+      tradeRoutes: Array.from(routeMap.values()),
+    };
+  }
+
+  /**
+   * Get overall dataset statistics.
+   */
+  getStats() {
+    const countries = new Set();
+    for (const e of this.edges) {
+      if (e.importCountry) countries.add(e.importCountry);
+      if (e.exportCountry) countries.add(e.exportCountry);
+    }
+    return {
+      totalCompanies: this.companies.size,
+      totalTradeLinks: this.edges.length,
+      totalCountries: countries.size,
+      totalDescriptions: this.descriptions.size,
+      totalHSCodes: this.hsTaxonomy.size,
     };
   }
 }

@@ -74,9 +74,11 @@ export default function HSNSelector({ companyName, onHSNSelect, selectedHSN }) {
                 <Hash size={10} className={selectedHSN === h.code ? 'text-violet-200' : 'text-violet-400'} />
                 <span className="font-black text-[11px] tracking-tight">{h.code}</span>
               </div>
-              <span className={`text-[9px] font-black tabular-nums px-1.5 py-0.5 rounded-md ${selectedHSN === h.code ? 'bg-white/20' : 'bg-violet-50 text-violet-600'}`}>
-                {fmt(h.totalQuantity)}
-              </span>
+              {h.totalQuantity > 0 && (
+                <span className={`text-[9px] font-black tabular-nums px-1.5 py-0.5 rounded-md ${selectedHSN === h.code ? 'bg-white/20' : 'bg-violet-50 text-violet-600'}`}>
+                  {fmt(h.totalQuantity)}
+                </span>
+              )}
             </div>
             <div className={`text-[9px] font-bold text-left truncate w-full uppercase tracking-tight ${selectedHSN === h.code ? 'text-violet-100' : 'text-slate-400'}`}>
               {h.description}
