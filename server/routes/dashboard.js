@@ -187,12 +187,14 @@ router.get('/', (req, res) => {
     }
     const monthlyTrend = Object.values(monthly).sort((a, b) => a.month.localeCompare(b.month));
 
+    const stats = csvService.getStats();
+
     res.json({
       summary: {
-        totalCompanies: companies.size || (isMockYear || year === '2026' ? 8 : 0),
+        totalCompanies: stats.totalDescriptions || companies.size || (isMockYear || year === '2026' ? 8 : 0),
         totalTradeLinks: edges.length || (isMockYear || year === '2026' ? 48 : 0),
         totalCountries: countries.size || (isMockYear || year === '2026' ? 5 : 0),
-        totalHSNCodes: new Set(edges.map(e => e.hsn)).size || (isMockYear || year === '2026' ? 12 : 0),
+        totalHSNCodes: stats.totalHSCodes || new Set(edges.map(e => e.hsn)).size || (isMockYear || year === '2026' ? 12 : 0),
         totalImportVolume: totalImportVol,
         totalExportVolume: totalExportVol,
         tradeBalance: totalTradeBalance,

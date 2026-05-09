@@ -80,9 +80,9 @@ class CSVGraphService {
 
   _loadDescriptions() {
     return new Promise((resolve, reject) => {
-      const csvPath = path.join(__dirname, '..', '..', 'data', 'cleaned_companies_data.csv');
+      const csvPath = path.join(__dirname, '..', '..', 'data', 'companies_with_bom_filters.csv');
       if (!fs.existsSync(csvPath)) {
-        console.warn(`  ⚠ cleaned_companies_data.csv not found at ${csvPath}`);
+        console.warn(`  ⚠ companies_with_bom_filters.csv not found at ${csvPath}`);
         return resolve();
       }
 
@@ -112,9 +112,9 @@ class CSVGraphService {
    */
   _loadGeoCompanies() {
     return new Promise((resolve, reject) => {
-      const csvPath = path.join(__dirname, '..', '..', 'data', 'cleaned_companies_data.csv');
+      const csvPath = path.join(__dirname, '..', '..', 'data', 'companies_with_bom_filters.csv');
       if (!fs.existsSync(csvPath)) {
-        console.warn(`  ⚠ cleaned_companies_data.csv not found at ${csvPath}`);
+        console.warn(`  ⚠ companies_with_bom_filters.csv not found at ${csvPath}`);
         return resolve();
       }
 
@@ -128,11 +128,28 @@ class CSVGraphService {
           const city = row.wikidata_hq?.trim() || row.city_clean?.trim() || null;
           const desc = row.wikidata_description?.trim() || '';
           const confidence = parseInt(row.confidence, 10) || 0;
+          
+          // Parse new fields
+          const industry = row.industry?.trim() || '';
+          const standardizedIndustry = row.standardized_industry?.trim() || '';
+          
+          // BOM_filter is a string representation of an array, e.g. "['raw materials', 'machinery']"
+          let bomFilter = [];
+          if (row.BOM_filter) {
+            try {
+              // Quick and dirty parse of single-quoted arrays like "['a', 'b']"
+              let cleanStr = row.BOM_filter.replace(/^"|"$/g, '').replace(/'/g, '"');
+              bomFilter = JSON.parse(cleanStr);
+            } catch (e) {
+              // fallback if parsing fails
+              bomFilter = row.BOM_filter.replace(/[\[\]'"]/g, '').split(',').map(s => s.trim()).filter(Boolean);
+            }
+          }
 
           if (name && !isNaN(lat) && !isNaN(lng)) {
             const key = name.toLowerCase();
             this.geoCompanies.set(key, {
-              name, country, lat, lng, city, description: desc, confidence
+              name, country, lat, lng, city, description: desc, confidence, industry, standardizedIndustry, bomFilter
             });
 
             // Aggregate country-level coordinates (average of all companies in that country)
@@ -305,16 +322,20 @@ class CSVGraphService {
    * Used by the trace engine for probabilistic matching.
    */
   findCompaniesByCountryAndProfile(country, keywords = []) {
-    const normalized = normalizeCountry(country);
+    const normalized = normalizeCountry(country).toLowerCase();
     const results = [];
-    for (const [nameKey, entry] of this.descriptions.entries()) {
-      if (normalizeCountry(entry.country) === normalized) {
+    for (const entry of this.geoCompanies.values()) {
+      if (entry.country.toLowerCase() === normalized) {
         if (keywords.length === 0) {
-          results.push({ name: nameKey, country: entry.country, description: entry.description });
+          results.push({ name: entry.name, country: entry.country, description: entry.description, lat: entry.lat, lng: entry.lng });
         } else {
-          const desc = entry.description.toLowerCase();
-          if (keywords.some(kw => desc.includes(kw.toLowerCase()))) {
-            results.push({ name: nameKey, country: entry.country, description: entry.description });
+          const desc = (entry.description || '').toLowerCase();
+          const ind = (entry.industry || '').toLowerCase();
+          const stdInd = (entry.standardizedIndustry || '').toLowerCase();
+          const text = `${desc} ${ind} ${stdInd}`;
+          
+          if (keywords.some(kw => text.includes(kw.toLowerCase()))) {
+            results.push({ name: entry.name, country: entry.country, description: entry.description, lat: entry.lat, lng: entry.lng });
           }
         }
       }
@@ -380,6 +401,14 @@ class CSVGraphService {
       entry.totalQuantity += edge.quantity;
     }
     return Array.from(hsnMap.values()).sort((a, b) => b.totalQuantity - a.totalQuantity);
+  }
+
+  /**
+   * Resolve geocoded company data including BOM filters.
+   */
+  resolveCompanyGeo(name) {
+    if (!name) return null;
+    return this.geoCompanies.get(name.toLowerCase()) || null;
   }
 
   getCompanyDetails(companyName) {

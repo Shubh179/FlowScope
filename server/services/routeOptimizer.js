@@ -193,7 +193,7 @@ class RouteOptimizer {
     // If local mapping failed, try BOM service (may use Gemini or fallback)
     if (!hsCode) {
       try {
-        const bomResult = await bomService.getStructuredBOM('85', componentName);
+        const bomResult = await bomService.getStructuredBOM('85', componentName, companyName);
         if (Array.isArray(bomResult)) {
           const match = bomResult.find(b => 
             b.component.toLowerCase().includes(componentLower) || 
@@ -226,31 +226,19 @@ class RouteOptimizer {
 
     steps.push({ step: 3, result: `${sourceCountries.length} sources: ${sourceCountries.join(', ')}` });
 
-    // ─── STEP 4: Build fully-connected country graph ───
-    steps.push({ step: 4, action: 'Building country graph' });
+    // ─── STEP 4: Build real trade country graph via Comtrade ───
+    steps.push({ step: 4, action: 'Building trade graph from Comtrade' });
 
-    // Collect all unique countries (sources + destination + any intermediaries)
-    const allCountries = new Set([destCountry, ...sourceCountries]);
-
-    // Add some intermediate hub countries for richer routing
-    const TRADE_HUBS = ['Singapore', 'Netherlands', 'Germany', 'United States', 'China', 'Japan', 'United Kingdom', 'South Korea', 'India', 'Turkey'];
-    for (const hub of TRADE_HUBS) {
-      allCountries.add(hub);
-    }
-
-    // Build graph nodes with coordinates
     const graph = new Map();
     const nodeDetails = new Map();
 
-    for (const country of allCountries) {
+    const addNode = (country, isDestination, isSource) => {
       const geo = csvService.getCountryGeo(country);
-      if (geo) {
-        const isDestination = country === destCountry;
-        // Use exact company coordinates for the destination, otherwise use country average
-        const lat = isDestination ? destLat : geo.lat;
-        const lng = isDestination ? destLng : geo.lng;
+      if (!geo) return false;
+      if (!graph.has(country)) {
+        const lat = (isDestination && destLat) ? destLat : geo.lat;
+        const lng = (isDestination && destLng) ? destLng : geo.lng;
         
-        // Ensure the selected company is at the front of the list for the destination node
         let nodeCompanies = geo.companies || [];
         if (isDestination && !nodeCompanies.includes(companyName)) {
           nodeCompanies = [companyName, ...nodeCompanies];
@@ -258,51 +246,65 @@ class RouteOptimizer {
           nodeCompanies = [companyName, ...nodeCompanies.filter(c => c !== companyName)];
         }
 
-        graph.set(country, {
-          lat,
-          lng,
-          neighbors: new Map(),
-        });
-        nodeDetails.set(country, {
-          name: country,
-          lat,
-          lng,
-          companies: nodeCompanies,
-          isSource: sourceCountries.includes(country),
-          isDestination,
-        });
+        graph.set(country, { lat, lng, neighbors: new Map() });
+        nodeDetails.set(country, { name: country, lat, lng, companies: nodeCompanies, isSource: false, isDestination: false });
       }
-    }
+      
+      const details = nodeDetails.get(country);
+      if (isSource) details.isSource = true;
+      if (isDestination) details.isDestination = true;
+      
+      return true;
+    };
 
-    // Create edges with real-world logistics weightings
-    const countries = Array.from(graph.keys());
+    addNode(destCountry, true, false);
+
+    // Link destCountry to its direct suppliers (Tier 1)
     let edgeCount = 0;
-    for (let i = 0; i < countries.length; i++) {
-      for (let j = i + 1; j < countries.length; j++) {
-        const a = graph.get(countries[i]);
-        const b = graph.get(countries[j]);
+    for (const source of sourceCountries) {
+      if (addNode(source, false, true)) {
+        const a = graph.get(source);
+        const b = graph.get(destCountry);
         const dist = haversine(a.lat, a.lng, b.lat, b.lng);
-        
-        const isAHub = TRADE_HUBS.includes(countries[i]);
-        const isBHub = TRADE_HUBS.includes(countries[j]);
-        
-        let cost = dist;
-        // Apply logistics routing logic to force realistic hub-and-spoke behavior:
-        if (isAHub && isBHub) {
-          cost = dist * 0.5; // Hub-to-hub superhighways are "cheaper"
-        } else if (isAHub || isBHub) {
-          cost = dist * 0.8; // Spoke-to-hub is efficient
-        } else if (dist > 3000) {
-          cost = dist * 3.0; // Direct long-haul between non-hubs is highly penalized
-        }
-
-        a.neighbors.set(countries[j], cost);
-        b.neighbors.set(countries[i], cost);
+        // Bidirectional for A* traversal
+        a.neighbors.set(destCountry, dist);
+        b.neighbors.set(source, dist);
         edgeCount++;
       }
     }
 
-    steps.push({ step: 4, result: `Graph: ${graph.size} nodes, ${countries.length * (countries.length - 1) / 2} edges` });
+    // Expand top 3 Tier 1 sources to find Tier 2 suppliers for realistic multi-hop routing
+    const topSources = sourceCountries.slice(0, 3);
+    for (const source of topSources) {
+      try {
+        const tier2Partners = await comtradeService.getTopPartners(source, hsCode);
+        for (const p2 of tier2Partners) {
+          const t2Source = normalizeCountryName(p2.country);
+          if (!t2Source || t2Source === source || t2Source === destCountry) continue;
+          
+          if (addNode(t2Source, false, true)) { // Treat Tier 2 as valid starting sources
+            const a = graph.get(t2Source);
+            const b = graph.get(source);
+            const dist = haversine(a.lat, a.lng, b.lat, b.lng);
+            
+            // Add slight penalty to multi-hop edges to reflect logistics overhead
+            const cost = dist * 1.2;
+            
+            a.neighbors.set(source, cost);
+            b.neighbors.set(t2Source, cost);
+            edgeCount++;
+            
+            if (!sourceCountries.includes(t2Source)) {
+              sourceCountries.push(t2Source); // Allow A* to start from Tier 2 nodes!
+            }
+          }
+        }
+      } catch (err) {
+        console.warn(`[RouteOptimizer] Failed to fetch Tier 2 partners for ${source}`);
+      }
+    }
+
+    steps.push({ step: 4, result: `Graph: ${graph.size} nodes, ${edgeCount} edges via Comtrade` });
 
     // ─── STEP 5: Run A* from each source → destination ───
     steps.push({ step: 5, action: 'Running A* pathfinding' });

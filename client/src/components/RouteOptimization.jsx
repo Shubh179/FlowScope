@@ -39,14 +39,27 @@ export default function RouteOptimization({ company, graphData }) {
   const [showSteps, setShowSteps] = useState(false);
   const [selectedRoute, setSelectedRoute] = useState(-1);
 
-  // Extract available components from existing graph data (BOM)
-  const availableComponents = (() => {
-    if (!graphData?.nodes) return [];
-    return graphData.nodes
-      .filter(n => n.type === 'Component')
-      .map(n => n.label)
-      .filter((v, i, a) => a.indexOf(v) === i);
-  })();
+  const [availableComponents, setAvailableComponents] = useState([]);
+
+  // Fetch company specific BOM components
+  useEffect(() => {
+    if (company?.name) {
+      axios.get(`/api/companies/${encodeURIComponent(company.name)}/hsn`)
+        .then(res => {
+          if (res.data && res.data.hsnCodes) {
+            setAvailableComponents(res.data.hsnCodes.map(h => h.description));
+          } else {
+            setAvailableComponents([]);
+          }
+        })
+        .catch(err => {
+          console.warn('Failed to load components for company', err);
+          setAvailableComponents([]);
+        });
+    } else {
+      setAvailableComponents([]);
+    }
+  }, [company]);
 
   const handleOptimize = useCallback(async () => {
     if (!company?.name || !component.trim()) return;

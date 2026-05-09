@@ -166,10 +166,22 @@ router.post('/expand', async (req, res) => {
     }
 
     const rootId = `c_${companyName}`;
+    let rootLat = 20, rootLng = 77;
+    const companyGeo = csvService.resolveCompanyGeo(companyName);
+    
+    if (companyGeo) {
+      rootLat = companyGeo.lat;
+      rootLng = companyGeo.lng;
+    } else {
+      const coords = getCoords(companyCountry, initialCity);
+      rootLat = coords[0];
+      rootLng = coords[1];
+    }
+
     const rootNode = { 
       id: rootId, type: 'Company', label: companyName, country: companyCountry || 'Unknown', city: initialCity, tier: 0, 
       description: initialDesc,
-      coords: getCoords(companyCountry, initialCity),
+      coords: [rootLat, rootLng],
       source: 'user-input',
       confidence: 'anchor'
     };
@@ -182,34 +194,18 @@ router.post('/expand', async (req, res) => {
 
       emitStatus(`Processing ${current.name} (Tier ${current.tier})...`);
 
-      // ─── STEP 1: Gemini proposes Structured BOM ───
+      // ─── STEP 1: Get Structured BOM (now dataset driven) ───
+      emitStatus(`Extracting BOM for ${current.name}...`);
       let bomList = [];
-      let usedGemini = false;
+      let usedGemini = false; // Kept for edge compatibility
 
-      if (allowGemini) {
-        emitStatus(`Extracting BOM for ${current.name}...`);
-        geminiAttemptCount += 1;
-        try {
-          const result = await bomService.getStructuredBOM(current.hs, current.description || '');
-          if (Array.isArray(result) && result.length > 0) {
-            bomList = result;
-            usedGemini = true;
-            geminiSuccessCount += 1;
-          }
-        } catch (err) {
-          geminiFailureCount += 1;
-          console.warn(`[TRACE] Gemini failed for HS ${current.hs}: ${err.message}`);
-          if (strictGemini) {
-            return res.status(502).json({ error: `Gemini BOM inference failed for HS ${current.hs}`, detail: err.message });
-          }
+      try {
+        const result = await bomService.getStructuredBOM(current.hs, current.description || '', current.name);
+        if (Array.isArray(result) && result.length > 0) {
+          bomList = result;
         }
-      }
-
-      if (!usedGemini) {
-        const chapter = String(current.hs).substring(0, 2);
-        bomList = (typeof bomService._fallbackStructuredBom === 'function') 
-          ? bomService._fallbackStructuredBom(chapter) 
-          : [];
+      } catch (err) {
+        console.warn(`[TRACE] BOM extraction failed for HS ${current.hs}: ${err.message}`);
       }
 
       // Ensure bomList is an array before processing
@@ -262,10 +258,20 @@ router.post('/expand', async (req, res) => {
           const partnerCountry = partner.country;
           const locNodeId = `loc_${partnerCountry.replace(/[^a-zA-Z0-9]/g, '')}`;
           
+          const countryGeo = csvService.getCountryGeo(partnerCountry);
+          let locLat = 20, locLng = 77;
+          if (countryGeo) {
+            locLat = countryGeo.lat;
+            locLng = countryGeo.lng;
+          } else {
+            locLat = COUNTRY_COORDS[partnerCountry]?.[0] || 20;
+            locLng = COUNTRY_COORDS[partnerCountry]?.[1] || 77;
+          }
+
           if (!allNodes.has(locNodeId)) {
             const locNode = {
               id: locNodeId, type: 'Location', label: partnerCountry,
-              coords: COUNTRY_COORDS[partnerCountry] || [20, 77]
+              coords: [locLat, locLng]
             };
             allNodes.set(locNodeId, locNode);
             emitUpdate('node', locNode);
@@ -329,14 +335,27 @@ router.post('/expand', async (req, res) => {
           // ─── STEP 6: Add Supplier Node & Recursion Edge ───
           for (const matched of matchedCompanies) {
             const supplierId = `c_${matched.name}`;
-            const dossier = csvService.descriptions.get(matched.name.toLowerCase());
+            const dossier = csvService.resolveCompanyGeo(matched.name);
             const supDesc = dossier?.description || csvService.getCompanyDescription(matched.name) || matched.description || 'Supply chain partner.';
             const supCity = dossier?.city || null;
             
+            let supLat = 20, supLng = 77;
+            if (matched.lat && matched.lng) {
+              supLat = matched.lat;
+              supLng = matched.lng;
+            } else if (dossier) {
+              supLat = dossier.lat;
+              supLng = dossier.lng;
+            } else {
+              const coords = getCoords(matched.country || partnerCountry, supCity);
+              supLat = coords[0];
+              supLng = coords[1];
+            }
+
             if (!allNodes.has(supplierId)) {
               const supNode = {
                 id: supplierId, type: 'Company', label: matched.name, country: matched.country || partnerCountry, city: supCity,
-                tier: current.tier + 1, coords: getCoords(matched.country || partnerCountry, supCity), description: supDesc
+                tier: current.tier + 1, coords: [supLat, supLng], description: supDesc
               };
               allNodes.set(supplierId, supNode);
               emitUpdate('node', supNode);

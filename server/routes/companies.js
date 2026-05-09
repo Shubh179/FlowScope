@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { getIsConnected, getDriver } = require('../config/neo4j');
 const csvService = require('../services/csvService');
+const bomService = require('../services/bomService');
 
 // ─── Default HSN categories for companies with no existing trade edges ───
 const DEFAULT_HSN_CATEGORIES = [
@@ -53,11 +54,21 @@ router.get('/search', async (req, res) => {
       }
     }
 
-    if (!companies) {
-      companies = csvService.searchCompanies(query);
+    // Always fetch from dataset
+    const datasetCompanies = csvService.searchCompanies(query);
+
+    // Merge them, prioritizing Neo4j companies but removing duplicates
+    const merged = [...(companies || [])];
+    const seen = new Set(merged.map(c => c.name.toLowerCase()));
+
+    for (const c of datasetCompanies) {
+      if (!seen.has(c.name.toLowerCase())) {
+        merged.push(c);
+        seen.add(c.name.toLowerCase());
+      }
     }
 
-    res.json({ companies });
+    res.json({ companies: merged.slice(0, 12) });
   } catch (err) {
     console.error('Search error:', err.message);
     res.status(500).json({ error: 'Search failed' });
@@ -94,9 +105,25 @@ router.get('/:name/hsn', async (req, res) => {
       }
     }
 
-    // If no edges exist yet, return default HSN categories so the user can pick one to trace
+    // If no edges exist yet, try to use the dataset's BOM filter, else default HSN categories
     if (hsnCodes.length === 0) {
-      hsnCodes = DEFAULT_HSN_CATEGORIES;
+      try {
+        const bomList = await bomService.getStructuredBOM('85', '', name);
+        if (bomList && bomList.length > 0) {
+          hsnCodes = bomList.map(b => ({
+            code: b.hs,
+            description: b.component.toUpperCase(),
+            count: 0,
+            totalQuantity: 0
+          }));
+        }
+      } catch (err) {
+        console.warn(`[Companies API] Failed to fetch BOM for ${name}`, err.message);
+      }
+
+      if (hsnCodes.length === 0) {
+        hsnCodes = DEFAULT_HSN_CATEGORIES;
+      }
     }
 
     res.json({ hsnCodes });
