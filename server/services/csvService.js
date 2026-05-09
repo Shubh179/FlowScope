@@ -99,7 +99,7 @@ class CSVGraphService {
 
   _loadDescriptions() {
     return new Promise((resolve, reject) => {
-      const csvPath = path.join(this.dataPath, 'companies_with_bom_filters.csv');
+      const csvPath = path.join(this.dataPath, 'geo_intel.csv');
       if (!fs.existsSync(csvPath)) {
         console.warn(`  ⚠ companies_with_bom_filters.csv not found at ${csvPath}`);
         return resolve();
@@ -134,9 +134,9 @@ class CSVGraphService {
    */
   _loadGeoCompanies() {
     return new Promise((resolve, reject) => {
-      const csvPath = path.join(this.dataPath, 'companies_with_bom_filters.csv');
+      const csvPath = path.join(this.dataPath, 'geo_intel.csv');
       if (!fs.existsSync(csvPath)) {
-        console.warn(`  ⚠ companies_with_bom_filters.csv not found at ${csvPath}`);
+        console.warn(`  ⚠ geo_intel.csv not found at ${csvPath}`);
         return resolve();
       }
 
