@@ -4,7 +4,7 @@
   "outputDirectory": "client/dist",
   "framework": "vite",
   "functions": {
-    "server/server.js": {
+    "api/index.js": {
       "memory": 1024,
       "maxDuration": 60
     }
@@ -12,7 +12,7 @@
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "/server/server.js"
+      "destination": "/api/index.js"
     },
     {
       "source": "/((?!api).*)",
