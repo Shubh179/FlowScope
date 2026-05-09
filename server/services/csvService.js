@@ -33,15 +33,19 @@ class CSVGraphService {
   }
 
   loadData() {
-    return Promise.all([
+    if (this.loadingPromise) return this.loadingPromise;
+    
+    this.loadingPromise = Promise.all([
       this._loadTradeData(),
-      this._loadDescriptions(),
       this._loadHSTaxonomy(),
-      this._loadGeoCompanies(),
+      this._loadEnrichedData(), // Consolidate loading of companies_with_bom_filters.csv
     ]).then(() => {
       this.loaded = true;
-      console.log(`  ✓ CSV loaded: ${this.companies.size} companies, ${this.edges.length} trade links, ${this.descriptions.size} dossiers, ${this.hsTaxonomy.size} HS codes, ${this.geoCompanies.size} geocoded entities`);
+      console.log(`  ✓ CSV loaded: ${this.companies.size} companies, ${this.edges.length} trade links, ${this.hsTaxonomy.size} HS codes, ${this.geoCompanies.size} enriched entities`);
+      return true;
     });
+    
+    return this.loadingPromise;
   }
 
   _loadTradeData() {
@@ -78,39 +82,11 @@ class CSVGraphService {
     });
   }
 
-  _loadDescriptions() {
-    return new Promise((resolve, reject) => {
-      const csvPath = path.join(__dirname, '..', 'data', 'companies_with_bom_filters.csv');
-      if (!fs.existsSync(csvPath)) {
-        console.warn(`  ⚠ companies_with_bom_filters.csv not found at ${csvPath}`);
-        return resolve();
-      }
-
-      fs.createReadStream(csvPath)
-        .pipe(csv())
-        .on('data', (row) => {
-          const name = row.company_name?.trim();
-          const desc = row.wikidata_description?.trim();
-          const city = row.wikidata_hq?.trim();
-          const country = normalizeCountry(row.country);
-          if (name && desc) {
-            this.descriptions.set(name.toLowerCase(), { 
-              description: desc, 
-              country,
-              city: city || null
-            });
-          }
-        })
-        .on('end', resolve)
-        .on('error', reject);
-    });
-  }
-
   /**
-   * Load the enriched companies dataset with geocoded coordinates.
-   * Source: cleaned_companies_data.csv
+   * Consolidated loading of the enriched companies dataset.
+   * Reads companies_with_bom_filters.csv ONCE to populate both descriptions and geo data.
    */
-  _loadGeoCompanies() {
+  _loadEnrichedData() {
     return new Promise((resolve, reject) => {
       const csvPath = path.join(__dirname, '..', 'data', 'companies_with_bom_filters.csv');
       if (!fs.existsSync(csvPath)) {
@@ -122,32 +98,36 @@ class CSVGraphService {
         .pipe(csv())
         .on('data', (row) => {
           const name = row.company_name?.trim();
+          if (!name) return;
+
+          const key = name.toLowerCase();
+          const country = normalizeCountry(row.country);
+          const desc = row.wikidata_description?.trim() || '';
+          const city = row.wikidata_hq?.trim() || row.city_clean?.trim() || null;
           const lat = parseFloat(row.latitude);
           const lng = parseFloat(row.longitude);
-          const country = normalizeCountry(row.country);
-          const city = row.wikidata_hq?.trim() || row.city_clean?.trim() || null;
-          const desc = row.wikidata_description?.trim() || '';
           const confidence = parseInt(row.confidence, 10) || 0;
-          
-          // Parse new fields
           const industry = row.industry?.trim() || '';
           const standardizedIndustry = row.standardized_industry?.trim() || '';
-          
-          // BOM_filter is a string representation of an array, e.g. "['raw materials', 'machinery']"
+
+          // Parse BOM Filter
           let bomFilter = [];
           if (row.BOM_filter) {
             try {
-              // Quick and dirty parse of single-quoted arrays like "['a', 'b']"
               let cleanStr = row.BOM_filter.replace(/^"|"$/g, '').replace(/'/g, '"');
               bomFilter = JSON.parse(cleanStr);
             } catch (e) {
-              // fallback if parsing fails
               bomFilter = row.BOM_filter.replace(/[\[\]'"]/g, '').split(',').map(s => s.trim()).filter(Boolean);
             }
           }
 
-          if (name && !isNaN(lat) && !isNaN(lng)) {
-            const key = name.toLowerCase();
+          // Populate Descriptions Map
+          if (desc) {
+            this.descriptions.set(key, { description: desc, country, city });
+          }
+
+          // Populate GeoCompanies Map
+          if (!isNaN(lat) && !isNaN(lng)) {
             this.geoCompanies.set(key, {
               name, country, lat, lng, city, description: desc, confidence, industry, standardizedIndustry, bomFilter
             });
@@ -158,9 +138,9 @@ class CSVGraphService {
               this.countryCoords.set(countryKey, { lat: 0, lng: 0, count: 0, companies: [], companyCoords: [], country });
             }
             const entry = this.countryCoords.get(countryKey);
-            entry.lat = ((entry.lat * entry.count) + lat) / (entry.count + 1);
-            entry.lng = ((entry.lng * entry.count) + lng) / (entry.count + 1);
-            entry.count += 1;
+            entry.lat += lat;
+            entry.lng += lng;
+            entry.count++;
             
             if (entry.companies.length < 10) {
               entry.companies.push(name);
@@ -168,7 +148,16 @@ class CSVGraphService {
             }
           }
         })
-        .on('end', resolve)
+        .on('end', () => {
+          // Finalize averages
+          for (const entry of this.countryCoords.values()) {
+            if (entry.count > 0) {
+              entry.lat /= entry.count;
+              entry.lng /= entry.count;
+            }
+          }
+          resolve();
+        })
         .on('error', reject);
     });
   }
