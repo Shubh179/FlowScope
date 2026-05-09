@@ -100,14 +100,24 @@ export default function InteractiveGlobe({ onCompanySelect }) {
 
   /* ── Search helpers ── */
   const fetchResults = useCallback(async (q) => {
-    if (!q) { setSuggestions([]); setOpen(false); return; }
+    if (!q || q.trim().length === 0) { setSuggestions([]); setOpen(false); return; }
+    
     setSearchLoading(true);
+    setOpen(true); // Open immediately to show "Searching..." or "No results"
+
     try {
-      const { data } = await axios.get(`/api/companies/search?q=${encodeURIComponent(q)}`);
+      const backendUrl = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+        ? `${window.location.protocol}//${window.location.hostname}:3001`
+        : window.location.origin;
+
+      const { data } = await axios.get(`${backendUrl}/api/companies/search?q=${encodeURIComponent(q)}`);
       setSuggestions(data.companies || []);
-      setOpen((data.companies || []).length > 0);
-    } catch { setSuggestions([]); }
-    finally { setSearchLoading(false); }
+    } catch (err) {
+      console.error('[Search] API Error:', err.message);
+      setSuggestions([]);
+    } finally {
+      setSearchLoading(false);
+    }
   }, []);
 
   useEffect(() => {
