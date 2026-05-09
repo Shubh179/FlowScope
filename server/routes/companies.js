@@ -22,7 +22,11 @@ const DEFAULT_HSN_CATEGORIES = [
  */
 router.get('/search', async (req, res) => {
   try {
-    const query = req.query.q || '';
+    const rawQuery = req.query.q || '';
+    const query = rawQuery.trim().toLowerCase();
+    
+    console.log(`[Search] Query: "${query}" (raw: "${rawQuery}")`);
+
     if (query.length < 1) {
       return res.json({ companies: [] });
     }
@@ -68,6 +72,7 @@ router.get('/search', async (req, res) => {
       }
     }
 
+    console.log(`[Search] Found ${merged.length} matches for "${query}"`);
     res.json({ companies: merged.slice(0, 12) });
   } catch (err) {
     console.error('Search error:', err.message);

@@ -356,41 +356,50 @@ export default function InteractiveGlobe({ onCompanySelect }) {
 
         {/* Dropdown */}
         <AnimatePresence>
-          {open && suggestions.length > 0 && (
-            <div ref={dropRef} className="absolute top-full left-4 right-4 z-[100]">
+          {open && focused && query.length > 0 && (
+            <div ref={dropRef} className="absolute top-full left-0 right-0 z-[999] px-4">
               <motion.div
                 initial={{ opacity: 0, y: 6, scale: 0.98 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 6, scale: 0.98 }}
-                className="mt-2 py-2 bg-[#0a0f1e]/95 backdrop-blur-2xl border border-white/[0.06] rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.6)] overflow-hidden"
+                className="mt-2 py-2 bg-[#0a0f1e]/95 backdrop-blur-3xl border border-[#00fff2]/20 rounded-2xl shadow-[0_20px_60px_rgba(0,0,0,0.8)] overflow-hidden"
               >
-                <div className="px-4 pb-2 mb-1 border-b border-white/[0.04]">
-                  <span className="text-[8px] font-black text-[#00fff2]/50 uppercase tracking-[0.2em]">Global Index</span>
+                <div className="px-4 pb-2 mb-1 border-b border-white/[0.04] flex justify-between items-center">
+                  <span className="text-[8px] font-black text-[#00fff2]/50 uppercase tracking-[0.2em]">Global Network Index</span>
+                  {suggestions.length > 0 && <span className="text-[8px] font-bold text-white/20 uppercase">{suggestions.length} Results</span>}
                 </div>
-                {suggestions.map((c, i) => (
-                  <button
-                    key={c.name}
-                    onClick={() => select(c)}
-                    onMouseEnter={() => setActive(i)}
-                    className={`w-full px-4 py-3 flex items-center justify-between transition-all ${i === active ? 'bg-[#00fff2]/[0.06]' : 'hover:bg-white/[0.02]'}`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-base shrink-0 border ${i === active ? 'bg-[#00fff2]/10 border-[#00fff2]/20' : 'bg-white/[0.03] border-white/[0.05]'}`}>
-                        {FLAGS[c.country] || '🏢'}
+
+                {suggestions.length > 0 ? (
+                  suggestions.map((c, i) => (
+                    <button
+                      key={`${c.name}-${i}`}
+                      onClick={() => select(c)}
+                      onMouseEnter={() => setActive(i)}
+                      className={`w-full px-4 py-3 flex items-center justify-between transition-all ${i === active ? 'bg-[#00fff2]/[0.08]' : 'hover:bg-white/[0.02]'}`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-9 h-9 rounded-xl flex items-center justify-center text-base shrink-0 border transition-colors ${i === active ? 'bg-[#00fff2]/20 border-[#00fff2]/40' : 'bg-white/[0.03] border-white/[0.05]'}`}>
+                          {FLAGS[c.country] || '🏢'}
+                        </div>
+                        <div className="text-left overflow-hidden">
+                          <div className={`text-sm font-bold truncate capitalize ${i === active ? 'text-[#00fff2]' : 'text-white/70'}`}>{c.name}</div>
+                          <div className="text-[9px] text-white/20 font-bold uppercase tracking-wider">{c.country}</div>
+                        </div>
                       </div>
-                      <div className="text-left">
-                        <div className={`text-sm font-bold truncate capitalize ${i === active ? 'text-[#00fff2]' : 'text-white/70'}`}>{c.name}</div>
-                        <div className="text-[9px] text-white/20 font-bold uppercase tracking-wider">{c.country}</div>
-                      </div>
-                    </div>
-                    {i === active && (
-                      <motion.div initial={{ x: -6, opacity: 0 }} animate={{ x: 0, opacity: 1 }} className="flex items-center gap-1 text-[#00fff2]">
-                        <span className="text-[9px] font-black uppercase">Trace</span>
-                        <ArrowRight size={12} />
-                      </motion.div>
-                    )}
-                  </button>
-                ))}
+                      {i === active && (
+                        <motion.div initial={{ x: -6, opacity: 0 }} animate={{ x: 0, opacity: 1 }} className="flex items-center gap-1 text-[#00fff2]">
+                          <span className="text-[9px] font-black uppercase">Trace</span>
+                          <ArrowRight size={12} />
+                        </motion.div>
+                      )}
+                    </button>
+                  ))
+                ) : (
+                  <div className="px-4 py-8 text-center">
+                    <div className="text-white/20 text-xs font-medium italic">No companies found matching "{query}"</div>
+                    <div className="text-[8px] text-white/10 uppercase font-bold tracking-widest mt-2">Try a known partner like "Reliance" or "Infosys"</div>
+                  </div>
+                )}
               </motion.div>
             </div>
           )}
