@@ -16,7 +16,14 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: ["https://flow-scope-client.vercel.app", "http://localhost:5173", "http://localhost:3000"],
+    origin: (origin, callback) => {
+      // Allow local development and any vercel.app subdomain
+      if (!origin || origin.includes('localhost') || origin.endsWith('.vercel.app')) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     methods: ["GET", "POST"],
     credentials: true
   }
@@ -34,7 +41,13 @@ process.on('uncaughtException', (err) => {
 
 // ─── Middleware ───
 app.use(cors({
-  origin: ["https://flow-scope-client.vercel.app", "http://localhost:5173", "http://localhost:3000"],
+  origin: (origin, callback) => {
+    if (!origin || origin.includes('localhost') || origin.endsWith('.vercel.app')) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 }));
 app.use(express.json());
