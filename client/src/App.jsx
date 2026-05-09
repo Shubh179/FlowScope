@@ -1,17 +1,27 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import axios from 'axios';
 import { io } from 'socket.io-client';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutDashboard, Cloud, Search as SearchIcon, ChevronLeft, ChevronRight, Info, Package, ArrowRightLeft, X, BarChart3, History, Clock, Route } from 'lucide-react';
-import Dashboard from './components/Dashboard';
-import SearchBar from './components/SearchBar';
-import HSNSelector from './components/HSNSelector';
-import GraphView from './components/GraphView';
-import MapView from './components/MapView';
-import DetailsPanel from './components/DetailsPanel';
-import AnalyticsModal from './components/AnalyticsModal';
-import InteractiveGlobe from './components/InteractiveGlobe';
-import RouteOptimization from './components/RouteOptimization';
+import { LayoutDashboard, Cloud, Search as SearchIcon, ChevronLeft, ChevronRight, Info, Package, ArrowRightLeft, X, BarChart3, History, Clock, Route, Loader2 } from 'lucide-react';
+
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const SearchBar = lazy(() => import('./components/SearchBar'));
+const HSNSelector = lazy(() => import('./components/HSNSelector'));
+const GraphView = lazy(() => import('./components/GraphView'));
+const MapView = lazy(() => import('./components/MapView'));
+const DetailsPanel = lazy(() => import('./components/DetailsPanel'));
+const AnalyticsModal = lazy(() => import('./components/AnalyticsModal'));
+const InteractiveGlobe = lazy(() => import('./components/InteractiveGlobe'));
+const RouteOptimization = lazy(() => import('./components/RouteOptimization'));
+
+const PageLoader = () => (
+  <div className="flex-1 flex items-center justify-center bg-slate-50">
+    <div className="flex flex-col items-center gap-4">
+      <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
+      <span className="font-black text-xs uppercase tracking-widest text-slate-400">Loading Intelligence Assets...</span>
+    </div>
+  </div>
+);
 
 export default function App() {
   const [page, setPage] = useState('dashboard');
@@ -299,7 +309,9 @@ export default function App() {
         {/* content Layer */}
         <div className={`flex-1 relative overflow-hidden ${page === 'dashboard' ? '' : 'pointer-events-none'}`}>
           {page === 'dashboard' ? (
-             <InteractiveGlobe onCompanySelect={(c) => { setCompany(c); setPage('analytics'); setHsn(null); setGraphData(null); }} />
+             <Suspense fallback={<PageLoader />}>
+               <InteractiveGlobe onCompanySelect={(c) => { setCompany(c); setPage('analytics'); setHsn(null); setGraphData(null); }} />
+             </Suspense>
           ) : (
             <div className="absolute inset-0 z-50 pointer-events-none">
               
@@ -453,19 +465,21 @@ export default function App() {
                     </button>
                     <div className="w-[380px] h-[280px] rounded-[32px] overflow-hidden border border-slate-200 shadow-2xl bg-white transition-transform group-hover:scale-[1.02]">
                       <div className="w-full h-full">
-                        {viewMode === 'map' ? (
-                          <GraphView
-                            graphData={graphData}
-                            highlightCompany={company?.name}
-                            selectedNode={selNode?.id}
-                            onNodeClick={handleNodeClickMiniGraph}
-                            onExpandNode={handleExpandNodeMiniGraph}
-                            expandingNode={expandingNode}
-                            showControls={false}
-                          />
-                        ) : (
-                          <MapView tradeRoutes={graphData?.tradeRoutes} nodes={graphData?.nodes} />
-                        )}
+                        <Suspense fallback={<PageLoader />}>
+                          {viewMode === 'map' ? (
+                            <GraphView
+                              graphData={graphData}
+                              highlightCompany={company?.name}
+                              selectedNode={selNode?.id}
+                              onNodeClick={handleNodeClickMiniGraph}
+                              onExpandNode={handleExpandNodeMiniGraph}
+                              expandingNode={expandingNode}
+                              showControls={false}
+                            />
+                          ) : (
+                            <MapView tradeRoutes={graphData?.tradeRoutes} nodes={graphData?.nodes} />
+                          )}
+                        </Suspense>
                       </div>
                     </div>
                 </div>
@@ -478,7 +492,9 @@ export default function App() {
           {/* ─── ROUTE OPTIMIZATION PAGE ─── */}
           {page === 'route' && (
             <div className="absolute inset-0 z-50 pointer-events-auto">
-              <RouteOptimization company={company} graphData={graphData} />
+              <Suspense fallback={<PageLoader />}>
+                <RouteOptimization company={company} graphData={graphData} />
+              </Suspense>
             </div>
           )}
         </div>
@@ -501,7 +517,9 @@ export default function App() {
                   <X size={16} strokeWidth={3} />
                </button>
               </div>
-              <DetailsPanel selectedNode={selNode} graphData={graphData} />
+              <Suspense fallback={<div className="p-10 flex justify-center"><Loader2 className="animate-spin text-blue-600" /></div>}>
+                <DetailsPanel selectedNode={selNode} graphData={graphData} />
+              </Suspense>
             </motion.div>
           </div>
         )}
@@ -510,12 +528,14 @@ export default function App() {
       {/* 📊 ANALYTICS MODAL */}
       <AnimatePresence>
         {showAnalytics && graphData && (
-          <AnalyticsModal
-            graphData={graphData}
-            company={company}
-            hsn={hsn}
-            onClose={() => setShowAnalytics(false)}
-          />
+          <Suspense fallback={null}>
+            <AnalyticsModal
+              graphData={graphData}
+              company={company}
+              hsn={hsn}
+              onClose={() => setShowAnalytics(false)}
+            />
+          </Suspense>
         )}
       </AnimatePresence>
 
