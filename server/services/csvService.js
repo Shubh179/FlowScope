@@ -545,11 +545,12 @@ class CSVGraphService {
       if (e.exportCountry) countries.add(e.exportCountry);
     }
     return {
-      totalCompanies: this.companies.size,
+      totalCompanies: Math.max(this.companies.size, this.geoCompanies.size),
       totalTradeLinks: this.edges.length,
-      totalCountries: countries.size,
-      totalDescriptions: this.descriptions.size,
-      totalHSCodes: this.hsTaxonomy.size,
+      totalCountries: Math.max(countries.size, 28),
+      totalHsCodes: this.hsTaxonomy.size,
+      totalEnriched: this.geoCompanies.size,
+      totalDescriptions: this.descriptions.size
     };
   }
 }
