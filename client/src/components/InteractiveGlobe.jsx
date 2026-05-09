@@ -206,10 +206,10 @@ export default function InteractiveGlobe({ onCompanySelect }) {
 
   /* ── Stat cards ── */
   const statCards = [
-    { icon: <Boxes size={16} />,       label: 'Companies', value: stats?.companyCount || 210, suffix: '+' },
-    { icon: <Waypoints size={16} />,   label: 'Trade Links', value: stats?.linkCount || 186,  suffix: '' },
-    { icon: <Globe2 size={16} />,      label: 'Countries',   value: 28,                        suffix: '' },
-    { icon: <ShieldCheck size={16} />, label: 'HS Codes',    value: stats?.hsCodeCount || 6940, suffix: '+' },
+    { icon: <Boxes size={16} />,       label: 'Companies', value: stats?.totalCompanies || 210, suffix: '+' },
+    { icon: <Waypoints size={16} />,   label: 'Trade Links', value: stats?.totalTradeLinks || 186,  suffix: '' },
+    { icon: <Globe2 size={16} />,      label: 'Countries',   value: stats?.totalCountries || 28,     suffix: '' },
+    { icon: <ShieldCheck size={16} />, label: 'HS Codes',    value: stats?.totalHSCodes || 6940,    suffix: '+' },
   ];
 
   /* ══════════════════════════════════════════════════════════
