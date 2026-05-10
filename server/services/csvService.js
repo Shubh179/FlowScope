@@ -409,8 +409,21 @@ class CSVGraphService {
    */
   getCompanyCountry(name) {
     if (!name) return null;
-    const entry = this.descriptions.get(name.toLowerCase());
-    return entry ? entry.country : null;
+    const lowerName = name.toLowerCase();
+    
+    // Priority 1: Geocoding Descriptions
+    const entry = this.descriptions.get(lowerName);
+    if (entry && entry.country) return entry.country;
+
+    // Priority 2: Trade History (Active companies)
+    // We search case-insensitively since map keys in this.companies are original case
+    for (const [cName, cData] of this.companies) {
+      if (cName.toLowerCase() === lowerName) {
+        return cData.country;
+      }
+    }
+
+    return null;
   }
 
   /**

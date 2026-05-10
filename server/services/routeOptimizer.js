@@ -147,15 +147,22 @@ class RouteOptimizer {
       destLat = destGeo.lat;
       destLng = destGeo.lng;
     } else {
-      // Fallback: Try company country from descriptions
-      destCountry = csvService.getCompanyCountry(companyName) || 'United States';
-      const countryGeo = csvService.getCountryGeo(destCountry);
-      if (countryGeo) {
-        destLat = countryGeo.lat;
-        destLng = countryGeo.lng;
+      // Fallback: Try company country from descriptions or trade history
+      destCountry = csvService.getCompanyCountry(companyName);
+      
+      if (destCountry) {
+        const countryGeo = csvService.getCountryGeo(destCountry);
+        if (countryGeo) {
+          destLat = countryGeo.lat;
+          destLng = countryGeo.lng;
+        } else {
+          destLat = 20.59; destLng = 78.96; // Global default to center-ish (India) if unknown
+        }
       } else {
-        destLat = 37.09;
-        destLng = -95.71; // Default to US center
+        console.warn(`[RouteOptimizer] Could not resolve country for ${companyName}. Defaulting to India.`);
+        destCountry = 'India'; 
+        destLat = 20.59;
+        destLng = 78.96; 
       }
     }
 
