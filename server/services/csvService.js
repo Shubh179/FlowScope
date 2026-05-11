@@ -142,6 +142,8 @@ class CSVGraphService {
         return resolve();
       }
 
+      this.allIndustries = new Set(); // Store all industries regardless of coordinates
+
       fs.createReadStream(csvPath)
         .pipe(csv())
         .on('data', (row) => {
@@ -161,6 +163,10 @@ class CSVGraphService {
           // Parse new fields
           const industry = row.industry?.trim() || '';
           const standardizedIndustry = row.standardized_industry?.trim() || '';
+          
+          if (standardizedIndustry) {
+            this.allIndustries.add(standardizedIndustry);
+          }
           
           // BOM_filter is a string representation of an array, e.g. "['raw materials', 'machinery']"
           let bomFilter = [];

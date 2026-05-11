@@ -56,7 +56,7 @@ function AnimatedCounter({ target, suffix = '', duration = 2000 }) {
 /* ══════════════════════════════════════════════════════════
    MAIN COMPONENT
    ══════════════════════════════════════════════════════════ */
-export default function InteractiveGlobe({ onCompanySelect }) {
+export default function InteractiveGlobe({ onCompanySelect, onNavigate }) {
   /* ── Search state ── */
   const [query, setQuery]             = useState('');
   const [suggestions, setSuggestions] = useState([]);
@@ -106,7 +106,8 @@ export default function InteractiveGlobe({ onCompanySelect }) {
     setOpen(true); // Open immediately to show "Searching..." or "No results"
 
     try {
-      const backendUrl = import.meta.env.VITE_API_URL || 'https://flowscope-uaaf.onrender.com';
+      const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const backendUrl = import.meta.env.VITE_API_URL || (isLocal ? 'http://localhost:3001' : 'https://flowscope-uaaf.onrender.com');
 
       const { data } = await axios.get(`${backendUrl}/api/companies/search?q=${encodeURIComponent(q)}`);
       setSuggestions(data.companies || []);
@@ -291,26 +292,14 @@ export default function InteractiveGlobe({ onCompanySelect }) {
           UI OVERLAYS (z-30, on top of globe)
           ═══════════════════════════════════════════════════════ */}
 
-      {/* ── TOP : Status pill ── */}
-      <motion.div
-        initial={{ opacity: 0, y: -15 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.3, duration: 0.7 }}
-        className="absolute top-6 right-8 z-30 flex items-center gap-3"
-      >
-        <div className="flex items-center gap-2 px-4 py-2 bg-white/[0.04] backdrop-blur-xl border border-white/[0.06] rounded-full">
-          <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.6)]" />
-          <span className="text-[10px] font-bold text-white/40 uppercase tracking-[0.15em]">Live Engine</span>
-        </div>
-      </motion.div>
-
-      {/* ── TOP-LEFT : Brand ── */}
-      <motion.div
-        initial={{ opacity: 0, x: -20 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ delay: 0.2, duration: 0.8 }}
-        className="absolute top-6 left-8 z-30"
-      >
+      <div className="absolute top-6 left-6 right-6 z-40 flex items-start justify-between pointer-events-none gap-4">
+        {/* ── TOP-LEFT : Brand ── */}
+        <motion.div
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.2, duration: 0.8 }}
+          className="pointer-events-auto shrink-0 hidden md:block"
+        >
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#00fff2] to-[#0ea5e9] flex items-center justify-center shadow-[0_0_25px_rgba(0,255,242,0.3)]">
             <Globe2 size={18} className="text-[#020617]" />
@@ -324,15 +313,15 @@ export default function InteractiveGlobe({ onCompanySelect }) {
         </div>
       </motion.div>
 
-      {/* ── CENTER-TOP : Search Bar ── */}
+      {/* ── CENTER-TOP : Search Bar & Actions ── */}
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4, duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-        className="absolute top-6 left-1/2 -translate-x-1/2 z-40 w-full max-w-lg px-4"
+        className="relative flex-1 max-w-2xl pointer-events-auto flex items-center justify-center gap-4"
       >
         <div className={`
-          flex items-center gap-3 px-5 py-3 rounded-2xl border transition-all duration-500
+          flex-1 flex items-center gap-3 px-5 py-3 rounded-2xl border transition-all duration-500
           ${focused
             ? 'bg-[#0a0f1e]/80 border-[#00fff2]/30 shadow-[0_0_40px_rgba(0,255,242,0.08)]'
             : 'bg-[#0a0f1e]/50 backdrop-blur-2xl border-white/[0.06] hover:border-white/[0.12]'}
@@ -350,17 +339,28 @@ export default function InteractiveGlobe({ onCompanySelect }) {
             onBlur={() => setFocused(false)}
             onKeyDown={onKey}
             placeholder="Search company in global trade network…"
-            className="flex-1 text-sm text-white placeholder:text-white/15 bg-transparent outline-none font-medium"
+            className="flex-1 text-sm text-white placeholder:text-white/15 bg-transparent outline-none font-medium min-w-[200px]"
             autoComplete="off"
           />
           {query ? (
-            <button onClick={clear} className="p-1 rounded-lg text-white/15 hover:text-red-400 transition-all"><X size={16} /></button>
+            <button onClick={clear} className="p-1 rounded-lg text-white/15 hover:text-red-400 transition-all shrink-0"><X size={16} /></button>
           ) : (
-            <div className="hidden sm:flex items-center gap-1 px-2 py-1 rounded bg-white/[0.04] border border-white/[0.05]">
+            <div className="hidden sm:flex items-center gap-1 px-2 py-1 rounded bg-white/[0.04] border border-white/[0.05] shrink-0">
               <Command size={10} className="text-white/15" /><span className="text-[9px] font-bold text-white/15">K</span>
             </div>
           )}
         </div>
+
+        {onNavigate && (
+          <div className="flex items-center gap-3 shrink-0">
+            <button onClick={() => onNavigate('register')} className="flex items-center gap-2 px-5 py-3 bg-emerald-500/10 backdrop-blur-xl border border-emerald-500/20 hover:border-emerald-400/40 rounded-2xl text-[11px] font-black text-emerald-400 hover:text-emerald-300 uppercase tracking-[0.1em] transition-all whitespace-nowrap">
+              + Add Company
+            </button>
+            <button onClick={() => onNavigate('directory')} className="flex items-center gap-2 px-5 py-3 bg-white/[0.04] backdrop-blur-xl border border-white/[0.06] hover:border-[#00fff2]/30 rounded-2xl text-[11px] font-black text-white/50 hover:text-[#00fff2] uppercase tracking-[0.1em] transition-all whitespace-nowrap">
+              Directory
+            </button>
+          </div>
+        )}
 
         {/* Dropdown */}
         <AnimatePresence>
@@ -413,6 +413,20 @@ export default function InteractiveGlobe({ onCompanySelect }) {
           )}
         </AnimatePresence>
       </motion.div>
+
+      {/* ── TOP-RIGHT : Status pill ── */}
+      <motion.div
+        initial={{ opacity: 0, x: 20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ delay: 0.3, duration: 0.7 }}
+        className="pointer-events-auto shrink-0 hidden sm:flex items-center gap-3"
+      >
+        <div className="flex items-center gap-2 px-4 py-2 bg-white/[0.04] backdrop-blur-xl border border-white/[0.06] rounded-full">
+          <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_rgba(52,211,153,0.6)]" />
+          <span className="text-[10px] font-bold text-white/40 uppercase tracking-[0.15em] whitespace-nowrap">Live Engine</span>
+        </div>
+      </motion.div>
+      </div>
 
       {/* ── RIGHT PANEL : Distance Card (appears when points selected) ── */}
       <AnimatePresence>

@@ -11,6 +11,7 @@ const graphRouter = require('./routes/graph');
 const traceRouter = require('./routes/trace');
 const dashboardRouter = require('./routes/dashboard');
 const routeOptimizerRouter = require('./routes/routeOptimizer');
+const registerRouter = require('./routes/register');
 
 const app = express();
 const server = http.createServer(app);
@@ -64,6 +65,7 @@ app.use('/api/graph', graphRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/trace', traceRouter);
 app.use('/api/route', routeOptimizerRouter);
+app.use('/api/register', registerRouter);
 
 // ─── Global Error Handler ───
 app.use((err, req, res, next) => {

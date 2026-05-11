@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { io } from 'socket.io-client';
 import { motion, AnimatePresence } from 'framer-motion';
-import { LayoutDashboard, Cloud, Search as SearchIcon, ChevronLeft, ChevronRight, Info, Package, ArrowRightLeft, X, BarChart3, History, Clock, Route } from 'lucide-react';
+import { LayoutDashboard, Cloud, Search as SearchIcon, ChevronLeft, ChevronRight, Info, Package, ArrowRightLeft, X, BarChart3, History, Clock, Route, Plus, Database } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import SearchBar from './components/SearchBar';
 import HSNSelector from './components/HSNSelector';
@@ -12,9 +12,18 @@ import DetailsPanel from './components/DetailsPanel';
 import AnalyticsModal from './components/AnalyticsModal';
 import InteractiveGlobe from './components/InteractiveGlobe';
 import RouteOptimization from './components/RouteOptimization';
+import AddCompany from './components/AddCompany';
+import CompanyDirectory from './components/CompanyDirectory';
 
 export default function App() {
-  const [page, setPage] = useState('dashboard');
+  const [page, setPage] = useState(() => {
+    const path = window.location.pathname;
+    if (path === '/register' || path === '/add-company') return 'register';
+    if (path === '/directory' || path === '/companies') return 'directory';
+    if (path === '/route' || path === '/optimizer') return 'route';
+    if (path === '/analytics') return 'analytics';
+    return 'dashboard';
+  });
   const [viewMode, setViewMode] = useState('map');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   
@@ -41,7 +50,8 @@ export default function App() {
 
   // ─── Socket.io Connection ───
   useEffect(() => {
-    const backendUrl = import.meta.env.VITE_API_URL || 'https://flowscope-uaaf.onrender.com';
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const backendUrl = import.meta.env.VITE_API_URL || (isLocal ? 'http://localhost:3001' : 'https://flowscope-uaaf.onrender.com');
     
     axios.defaults.baseURL = backendUrl;
     const socket = io(backendUrl, {
@@ -267,7 +277,7 @@ export default function App() {
         {/* Global Control Bar - Hidden on cinematic dashboard */}
         <header className={`h-16 flex items-center justify-between px-6 z-[60] shrink-0 ${page === 'dashboard' ? 'hidden' : 'pointer-events-none'}`}>
           <div className="flex items-center gap-4 pointer-events-auto">
-            {(page === 'analytics' || page === 'route') && (
+            {(page === 'analytics' || page === 'route' || page === 'register' || page === 'directory') && (
               <button onClick={() => { setPage('dashboard'); setCompany(null); setHsn(null); setGraphData(null); }} className="flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-gray-100 text-black rounded-lg transition-all font-bold text-sm border border-gray-200 shadow-sm">
                 ← Exit
               </button>
@@ -283,6 +293,18 @@ export default function App() {
                 <Cloud size={14} />
                 Back to Analytics
               </button>
+            )}
+            {page === 'analytics' && (
+              <>
+                <button onClick={() => setPage('register')} className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-all font-bold text-xs uppercase tracking-wider shadow-lg shadow-emerald-500/20 border border-emerald-500/30">
+                  <Plus size={14} />
+                  Add Company
+                </button>
+                <button onClick={() => setPage('directory')} className="flex items-center gap-2 px-4 py-2.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-all font-bold text-xs uppercase tracking-wider shadow-lg border border-slate-600/50">
+                  <Database size={14} />
+                  Directory
+                </button>
+              </>
             )}
           </div>
           <div className="max-w-xl w-full flex items-center justify-center pointer-events-auto">
@@ -301,7 +323,7 @@ export default function App() {
         {/* content Layer */}
         <div className={`flex-1 relative overflow-hidden ${page === 'dashboard' ? '' : 'pointer-events-none'}`}>
           {page === 'dashboard' ? (
-             <InteractiveGlobe onCompanySelect={(c) => { setCompany(c); setPage('analytics'); setHsn(null); setGraphData(null); }} />
+             <InteractiveGlobe onCompanySelect={(c) => { setCompany(c); setPage('analytics'); setHsn(null); setGraphData(null); }} onNavigate={(p) => setPage(p)} />
           ) : (
             <div className="absolute inset-0 z-50 pointer-events-none">
               
@@ -481,6 +503,23 @@ export default function App() {
           {page === 'route' && (
             <div className="absolute inset-0 z-50 pointer-events-auto">
               <RouteOptimization company={company} graphData={graphData} />
+            </div>
+          )}
+
+          {/* ─── ADD COMPANY PAGE ─── */}
+          {page === 'register' && (
+            <div className="absolute inset-0 z-50 pointer-events-auto">
+              <AddCompany onBack={() => setPage(company ? 'analytics' : 'dashboard')} />
+            </div>
+          )}
+
+          {/* ─── COMPANY DIRECTORY PAGE ─── */}
+          {page === 'directory' && (
+            <div className="absolute inset-0 z-50 pointer-events-auto">
+              <CompanyDirectory 
+                onBack={() => setPage(company ? 'analytics' : 'dashboard')} 
+                onSelect={(c) => { setCompany(c); setPage('analytics'); setHsn(null); setGraphData(null); }}
+              />
             </div>
           )}
         </div>
