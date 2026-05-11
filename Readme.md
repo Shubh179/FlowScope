@@ -8,7 +8,7 @@ FlowScope is a high-performance supply chain intelligence platform designed to m
 
 ## ✨ Key Features
 
-- **🛡️ AI-Powered BOM Inference:** Uses Gemini AI to automatically predict and verify product sub-components (e.g., Bauxite → Alumina → Aluminum).
+- **🛡️ Intelligent BOM Inference:** Automatically predicts and verifies product sub-components (e.g., Bauxite → Alumina → Aluminum).
 - **🕸️ Dynamic Graph Engine:** Interactive multi-tier graph visualization powered by **Cytoscape.js**, featuring hardware-accelerated nodes and real-time path discovery.
 - **🗺️ Global Map Intelligence:** Real-time trade route mapping using **Leaflet**, visualizing the physical flow of goods across continents with precise coordinates powered by the **OpenCage Geocoding API**.
 - **📊 Intelligence Dossiers:** Instant access to verified company profiles, enriched dynamically with live data from **Wikipedia**.
@@ -27,7 +27,7 @@ FlowScope is a high-performance supply chain intelligence platform designed to m
 | **Backend** | Node.js, Express, Axios |
 | **Database** | Neo4j (GraphDB), CSV Fast-Streaming |
 | **Visualization** | Leaflet.js (Map), Cytoscape.js (Graph) |
-| **AI/Algorithms** | Google Gemini AI, BFS, A* Search |
+| **Algorithms** | BFS, A* Search |
 | **External APIs** | **UN Comtrade** (Trade Data), **Wikipedia** (Company Bios), **OpenCage** (Geocoding) |
 
 ---
@@ -36,9 +36,9 @@ FlowScope is a high-performance supply chain intelligence platform designed to m
 
 The system operates on a **Discovery-Cache** model:
 1.  **Static Database:** Core company data and HSN taxonomies are stored in Neo4j and high-speed CSV caches.
-2.  **Live Discovery:** When a node expansion is requested, the **Trace Engine** queries Gemini AI to predict dependencies, fetches volume metrics from the **UN Comtrade API**, and resolves company context via **Wikipedia**.
+2.  **Live Discovery:** When a node expansion is requested, the **Trace Engine** predicts dependencies, fetches volume metrics from the **UN Comtrade API**, and resolves company context via **Wikipedia**.
 3.  **Geospatial Resolution:** Company addresses are passed through **OpenCage** to get precise latitude/longitude for rendering on the Leaflet map.
-4.  **Real-time Aggregation:** The frontend merges database state with live AI-discovered partners into a unified graph store, utilizing A* algorithms to compute logistical distances.
+4.  **Real-time Aggregation:** The frontend merges database state with live-discovered partners into a unified graph store, utilizing A* algorithms to compute logistical distances.
 
 ---
 
@@ -47,7 +47,7 @@ The system operates on a **Discovery-Cache** model:
 ### Prerequisites
 - Node.js (v18+)
 - Neo4j Instance (Local or AuraDB)
-- API Keys for Google Gemini and OpenCage
+- API Key for OpenCage
 
 ### Installation
 
@@ -83,7 +83,6 @@ PORT=3001
 NEO4J_URI=bolt://localhost:7687
 NEO4J_USER=neo4j
 NEO4J_PASSWORD=your_password
-GEMINI_API_KEY=your_google_ai_key
 OPENCAGE_API_KEY=your_opencage_key
 ```
 
