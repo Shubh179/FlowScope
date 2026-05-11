@@ -8,24 +8,27 @@ FlowScope is a high-performance supply chain intelligence platform designed to m
 
 ## ✨ Key Features
 
-- **🛡️ AI-Powered BOM Inference:** Uses Gemini AI and UN Comtrade data to automatically predict and verify product sub-components (Bauxite → Alumina → Aluminum).
+- **🛡️ AI-Powered BOM Inference:** Uses Gemini AI to automatically predict and verify product sub-components (e.g., Bauxite → Alumina → Aluminum).
 - **🕸️ Dynamic Graph Engine:** Interactive multi-tier graph visualization powered by **Cytoscape.js**, featuring hardware-accelerated nodes and real-time path discovery.
-- **🗺️ Global Map Intelligence:** Real-time trade route mapping using **Leaflet**, visualizing the physical flow of goods across continents.
-- **📊 Intelligence Dossiers:** instant access to verified company profiles, trade volumes, and partner networks.
-- **🔍 Prefix-Score Search:** Optimized search engine that prioritizes exact brand matches and caches results for sub-millisecond retrieval.
-- **⛓️ Tier-Based Taxonomy:** Automatic classification of suppliers (Tier 1-4) using a custom Breadth-First Search (BFS) discovery algorithm.
+- **🗺️ Global Map Intelligence:** Real-time trade route mapping using **Leaflet**, visualizing the physical flow of goods across continents with precise coordinates powered by the **OpenCage Geocoding API**.
+- **📊 Intelligence Dossiers:** Instant access to verified company profiles, enriched dynamically with live data from **Wikipedia**.
+- **🔍 Advanced Algorithms:** 
+  - **Breadth-First Search (BFS):** Categorizes supply chain depth (Tier 1-4) automatically to discover direct and indirect dependencies.
+  - **A* (A-Star) Pathfinding:** Optimizes logistics routes and distance tracking between suppliers and buyers across the globe.
+- **📈 Global Trade Flow Data:** Integrates with the **UN Comtrade API** to fetch accurate trade volume metrics and cross-border shipment data.
 
 ---
 
-## 🛠️ Technology Stack
+## 🛠️ Technology Stack & Data Sources
 
-| Layer | Technologies |
+| Layer | Technologies / Sources |
 | :--- | :--- |
 | **Frontend** | React, Vite, TailwindCSS, Framer Motion, Lucide Icons |
 | **Backend** | Node.js, Express, Axios |
 | **Database** | Neo4j (GraphDB), CSV Fast-Streaming |
 | **Visualization** | Leaflet.js (Map), Cytoscape.js (Graph) |
-| **AI/Data** | Google Gemini AI, UN Comtrade API |
+| **AI/Algorithms** | Google Gemini AI, BFS, A* Search |
+| **External APIs** | **UN Comtrade** (Trade Data), **Wikipedia** (Company Bios), **OpenCage** (Geocoding) |
 
 ---
 
@@ -33,8 +36,9 @@ FlowScope is a high-performance supply chain intelligence platform designed to m
 
 The system operates on a **Discovery-Cache** model:
 1.  **Static Database:** Core company data and HSN taxonomies are stored in Neo4j and high-speed CSV caches.
-2.  **Live Discovery:** When a node expansion is requested, the **Trace Engine** queries Gemini AI to predict dependencies and fetches volume metrics from the UN Comtrade API.
-3.  **Real-time Aggregation:** The frontend merges database state with live AI-discovered partners into a unified graph store.
+2.  **Live Discovery:** When a node expansion is requested, the **Trace Engine** queries Gemini AI to predict dependencies, fetches volume metrics from the **UN Comtrade API**, and resolves company context via **Wikipedia**.
+3.  **Geospatial Resolution:** Company addresses are passed through **OpenCage** to get precise latitude/longitude for rendering on the Leaflet map.
+4.  **Real-time Aggregation:** The frontend merges database state with live AI-discovered partners into a unified graph store, utilizing A* algorithms to compute logistical distances.
 
 ---
 
@@ -43,7 +47,7 @@ The system operates on a **Discovery-Cache** model:
 ### Prerequisites
 - Node.js (v18+)
 - Neo4j Instance (Local or AuraDB)
-- Google Gemini API Key
+- API Keys for Google Gemini and OpenCage
 
 ### Installation
 
@@ -80,18 +84,21 @@ NEO4J_URI=bolt://localhost:7687
 NEO4J_USER=neo4j
 NEO4J_PASSWORD=your_password
 GEMINI_API_KEY=your_google_ai_key
+OPENCAGE_API_KEY=your_opencage_key
 ```
 
 ---
 
-## 📐 The Tier Taxonomy (BFS Algorithm)
+## 📐 Algorithmic Foundations
 
-FlowScope uses a BFS (Breadth-First Search) model to categorize supply chain depth:
+FlowScope leverages foundational graph algorithms to make sense of complex trade flows:
 
-- **Tier 0:** Your search origin.
-- **Tier 1:** Direct strategic partners.
-- **Tier 2:** Secondary upstream suppliers.
-- **Tier 3+:** Raw material foundations (Ores, Minerals, Fuels).
+- **Breadth-First Search (BFS):** Traverses the supply chain network layer-by-layer to determine clear "Tiers":
+  - **Tier 0:** Your search origin.
+  - **Tier 1:** Direct strategic partners.
+  - **Tier 2:** Secondary upstream suppliers.
+  - **Tier 3+:** Raw material foundations (Ores, Minerals, Fuels).
+- **A* (A-Star) Search Algorithm:** Computes the most efficient logistical paths and shortest transit distances between international trade nodes, accounting for geographical heuristics.
 
 ---
 
