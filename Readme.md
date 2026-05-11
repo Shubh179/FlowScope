@@ -53,8 +53,8 @@ The system operates on a hybrid **Pre-Computed & Dynamic** model:
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/syn3rgy2026/Vibe_Creators_Syn3rgy_RudraSanjaySheth.git
-   cd Vibe_Creators_Syn3rgy_RudraSanjaySheth
+   git clone https://github.com/Shubh179/FlowScope.git
+   cd FlowScope
    ```
 
 2. **Setup Server:**
@@ -99,16 +99,5 @@ FlowScope leverages foundational graph algorithms to make sense of complex trade
   - **Tier 3+:** Raw material foundations (Ores, Minerals, Fuels).
 - **A* (A-Star) Search Algorithm:** Computes the most efficient logistical paths and shortest transit distances between international trade nodes, accounting for geographical heuristics.
 
----
-
-## 🤝 Contributors
-
-**Vibe Creators - Syn3rgy**
-- *Rudra Sanjay Sheth*
-- *Tanvi Kamath*
-- *Vidhi Shah*
-- *Shubh Shah*
-
----
 
 *FlowScope is built for precision. Trace the invisible, secure the future.*
