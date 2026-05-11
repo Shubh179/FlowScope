@@ -59,8 +59,8 @@ The system operates on a hybrid **Pre-Computed & Dynamic** architecture built fo
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/Shubh179/FlowScope.git
-   cd FlowScope
+   git clone https://github.com/rudrasheth/flow-scope.git
+   cd flow-scope
    ```
 
 2. **Setup Server:**
